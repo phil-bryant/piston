@@ -1,0 +1,3 @@
+module PistonPackageTests {
+    header "/Users/phil/local/src/piston/.build/arm64-apple-macosx/debug/PistonPackageTests.build/include/PistonPackageTests-Swift.h"
+}

@@ -1,0 +1,4 @@
+module FountainShim {
+    umbrella "/Users/phil/local/src/piston/Sources/FountainShim"
+    export *
+}

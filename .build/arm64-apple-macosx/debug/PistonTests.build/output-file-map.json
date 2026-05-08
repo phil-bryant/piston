@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/phil/local/src/piston/.build/arm64-apple-macosx/debug/PistonTests.build/primary.swiftdeps"
+  },
+  "/Users/phil/local/src/piston/Tests/PistonTests/PistonUploaderTests.swift": {
+    "dependencies": "/Users/phil/local/src/piston/.build/arm64-apple-macosx/debug/PistonTests.build/PistonUploaderTests.d",
+    "object": "/Users/phil/local/src/piston/.build/arm64-apple-macosx/debug/PistonTests.build/PistonUploaderTests.swift.o",
+    "swiftmodule": "/Users/phil/local/src/piston/.build/arm64-apple-macosx/debug/PistonTests.build/PistonUploaderTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/phil/local/src/piston/.build/arm64-apple-macosx/debug/PistonTests.build/PistonUploaderTests.swiftdeps",
+    "diagnostics": "/Users/phil/local/src/piston/.build/arm64-apple-macosx/debug/PistonTests.build/PistonUploaderTests.dia"
+  }
+}
