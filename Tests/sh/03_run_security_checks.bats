@@ -1,0 +1,176 @@
+#!/usr/bin/env bats
+
+setup() {
+  export REPO_ROOT="/Users/phil/local/src/piston"
+  export SCRIPT_SOURCE="${REPO_ROOT}/03_run_security_checks.sh"
+  export TMP_ROOT
+  TMP_ROOT="$(mktemp -d)"
+  export STUB_BIN="${TMP_ROOT}/bin"
+  export FIXTURE_ROOT="${TMP_ROOT}/fixture"
+  export CALLS_LOG="${TMP_ROOT}/calls.log"
+  mkdir -p "${STUB_BIN}" "${FIXTURE_ROOT}/Tests/sh"
+  cp "${SCRIPT_SOURCE}" "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  chmod +x "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  : > "${CALLS_LOG}"
+}
+
+write_shellcheck_stub_with_findings() {
+  cat > "${STUB_BIN}/shellcheck" <<'EOF'
+#!/usr/bin/env bash
+echo "shellcheck $*" >> "${CALLS_LOG}"
+if [[ "$1" == "-f" && "$2" == "json" ]]; then
+  printf '%s' '[{"file":"03_run_security_checks.sh","line":1,"code":2001,"level":"warning","message":"example finding"}]'
+  exit 1
+fi
+exit 2
+EOF
+  chmod +x "${STUB_BIN}/shellcheck"
+}
+
+write_shellcheck_stub_clean() {
+  cat > "${STUB_BIN}/shellcheck" <<'EOF'
+#!/usr/bin/env bash
+echo "shellcheck $*" >> "${CALLS_LOG}"
+printf '%s' '[]'
+exit 0
+EOF
+  chmod +x "${STUB_BIN}/shellcheck"
+}
+
+write_semgrep_stub_with_findings() {
+  cat > "${STUB_BIN}/semgrep" <<'EOF'
+#!/usr/bin/env bash
+echo "semgrep $*" >> "${CALLS_LOG}"
+output_path=""
+while [[ "$#" -gt 0 ]]; do
+  if [[ "$1" == "--output" ]]; then
+    output_path="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+printf '%s' '{"results":[{"check_id":"demo","path":"demo.sh"}]}' > "${output_path}"
+exit 1
+EOF
+  chmod +x "${STUB_BIN}/semgrep"
+}
+
+write_semgrep_stub_exec_failure() {
+  cat > "${STUB_BIN}/semgrep" <<'EOF'
+#!/usr/bin/env bash
+echo "semgrep $*" >> "${CALLS_LOG}"
+exit 2
+EOF
+  chmod +x "${STUB_BIN}/semgrep"
+}
+
+write_gitleaks_stub_with_findings() {
+  cat > "${STUB_BIN}/gitleaks" <<'EOF'
+#!/usr/bin/env bash
+echo "gitleaks $*" >> "${CALLS_LOG}"
+report_path=""
+while [[ "$#" -gt 0 ]]; do
+  if [[ "$1" == "--report-path" ]]; then
+    report_path="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+printf '%s' '[{"RuleID":"generic-api-key","File":"Secrets.txt"}]' > "${report_path}"
+exit 1
+EOF
+  chmod +x "${STUB_BIN}/gitleaks"
+}
+
+write_gitleaks_stub_exec_failure() {
+  cat > "${STUB_BIN}/gitleaks" <<'EOF'
+#!/usr/bin/env bash
+echo "gitleaks $*" >> "${CALLS_LOG}"
+exit 2
+EOF
+  chmod +x "${STUB_BIN}/gitleaks"
+}
+
+@test "Traceability tags for security-check requirements" {
+  #R001: Strict mode and repository-root execution coverage.
+  #R005: Lane toggles and report directory configuration coverage.
+  #R010: Missing-command failure messaging coverage.
+  #R015: ShellCheck execution and report persistence coverage.
+  #R020: Semgrep execution/report behavior coverage.
+  #R025: Gitleaks execution/report behavior coverage.
+  #R030: Consolidated summary and fail-on-findings policy coverage.
+  true
+}
+
+@test "R001,R005: runs from outside cwd and creates custom report directory with lanes disabled" {
+  #R001: Verifies script anchors to repo root via script location.
+  #R005: Verifies custom report directory and lane toggles.
+  mkdir -p "${TMP_ROOT}/outside"
+  cd "${TMP_ROOT}/outside"
+  run env PATH="/usr/bin:/bin" RUN_SHELLCHECK=false RUN_SEMGREP=false RUN_GITLEAKS=false \
+    SECURITY_REPORT_DIR="${FIXTURE_ROOT}/custom-reports" /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 0 ]
+  [ -d "${FIXTURE_ROOT}/custom-reports" ]
+  [ -f "${FIXTURE_ROOT}/custom-reports/security-summary.json" ]
+}
+
+@test "R010: fails clearly when enabled lane command is missing" {
+  #R010: Verifies explicit missing-command guidance.
+  run env PATH="/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 1 ]
+  [[ "${output}" == *"Missing required command: shellcheck"* ]]
+}
+
+@test "R015,R030: shellcheck findings are summarized and gate can fail" {
+  #R015: Verifies shellcheck lane writes JSON report.
+  #R030: Verifies fail-on-findings gate behavior.
+  write_shellcheck_stub_with_findings
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SEMGREP=false RUN_GITLEAKS=false SECURITY_FAIL_ON_FINDINGS=true \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 1 ]
+  [ -f "${FIXTURE_ROOT}/.security-reports/shellcheck.json" ]
+  [[ "${output}" == *"ShellCheck reported findings."* ]]
+  [[ "${output}" == *"ShellCheck findings"* ]]
+  [[ "${output}" == *"SC2001 example finding"* ]]
+  [[ "${output}" == *"Security checks failed: findings detected"* ]]
+}
+
+@test "R020,R030: semgrep findings are summarized and can pass when gate disabled" {
+  #R020: Verifies semgrep report artifact and findings handling.
+  #R030: Verifies disabled gate allows findings without failing.
+  write_shellcheck_stub_clean
+  write_semgrep_stub_with_findings
+  write_gitleaks_stub_with_findings
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true SECURITY_FAIL_ON_FINDINGS=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 0 ]
+  [ -f "${FIXTURE_ROOT}/.security-reports/semgrep.json" ]
+  [ -f "${FIXTURE_ROOT}/.security-reports/gitleaks.json" ]
+  [ -f "${FIXTURE_ROOT}/.security-reports/security-summary.json" ]
+  [[ "${output}" == *"Semgrep reported findings."* ]]
+  [[ "${output}" == *"Gitleaks reported findings."* ]]
+}
+
+@test "R020: semgrep execution failure exits with explicit error" {
+  #R020: Verifies semgrep execution-failure path for exit code > 1.
+  write_shellcheck_stub_clean
+  write_semgrep_stub_exec_failure
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 1 ]
+  [[ "${output}" == *"Semgrep failed to execute."* ]]
+}
+
+@test "R025: gitleaks execution failure exits with explicit error" {
+  #R025: Verifies gitleaks execution-failure path for exit code > 1.
+  write_shellcheck_stub_clean
+  write_semgrep_stub_with_findings
+  write_gitleaks_stub_exec_failure
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true SECURITY_FAIL_ON_FINDINGS=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 1 ]
+  [[ "${output}" == *"Gitleaks failed to execute."* ]]
+}

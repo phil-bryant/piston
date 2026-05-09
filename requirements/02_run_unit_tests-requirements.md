@@ -30,4 +30,5 @@ Tests:
 
 ## Changelog
 
+- 2026-05-09: Updated traceability-tag test placeholder to use a ShellCheck-safe always-pass assertion (`true`) instead of SC2050 tautologies.
 - 2026-05-08: Initial requirements for `02_run_unit_tests.sh`.

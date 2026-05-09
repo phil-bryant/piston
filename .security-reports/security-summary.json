@@ -1,0 +1,7 @@
+{
+  "shellcheck_findings": 0,
+  "semgrep_findings": 0,
+  "gitleaks_findings": 0,
+  "total_findings": 0,
+  "gate_failed": false
+}

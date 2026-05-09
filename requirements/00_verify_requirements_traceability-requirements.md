@@ -85,6 +85,7 @@ Tests:
 
 ## Changelog
 
+- 2026-05-09: Updated traceability-tag test placeholder to use a ShellCheck-safe always-pass assertion (`true`) instead of SC2050 tautologies.
 - 2026-05-07: Reswizzled discovery conventions for Piston (`Tests/sh` + SwiftPM `Tests/`) and removed email app-specific paths.
 - 2026-05-06: Added test discovery convention for top-level `Makefile` requirements mapping to `Tests/sh/Makefile.bats`.
 - 2026-04-24: Added numbered script coverage enforcement for `NN_` script/requirements parity.

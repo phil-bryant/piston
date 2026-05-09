@@ -64,7 +64,7 @@ EOF
   #R055: UI-required requirement classification coverage.
   #R060: Test-lane #R extraction coverage.
   #R065: Missing test-traceability ID failure coverage.
-  [ 1 -eq 1 ]
+  true
 }
 
 @test "Fails when header-bundled tags are used near file top" {

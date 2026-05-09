@@ -45,7 +45,7 @@ EOF
   #R005: Repository-root execution coverage.
   #R010: Shell-lane bats invocation and failure guidance coverage.
   #R020: Swift-lane invocation and failure guidance coverage.
-  [ 1 -eq 1 ]
+  true
 }
 
 @test "runs from repository root regardless of caller cwd" {
