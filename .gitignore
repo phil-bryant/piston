@@ -7,6 +7,8 @@ DerivedData/
 #R010: Keep Sources/, Tests/, and Package.swift tracked by not ignoring them here.
 #R015: Use `git rm -r --cached <path>` for tracked cache cleanup without deleting local files.
 #R020: Verify ignored artifact paths are untracked via `git ls-files | rg`.
+#R025: Exclude local security scanner reports from version control.
+.security-reports/
 .DS_Store
 bin/*
 .cursor/rules/*

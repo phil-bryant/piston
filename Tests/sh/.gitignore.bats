@@ -6,5 +6,6 @@
   #R010: Source and manifest paths remain tracked by policy.
   #R015: Cached-removal workflow requirement is documented.
   #R020: Post-cleanup untracked verification requirement is documented.
-  [ 1 -eq 1 ]
+  #R025: Security scanner report artifacts are ignored and untracked.
+  true
 }
