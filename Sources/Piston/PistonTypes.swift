@@ -1,9 +1,11 @@
 import Foundation
 
+// #R001: Expose diagnostics upload consent flag used to gate batch-claim behavior.
 public protocol DiagnosticsConsentProvider: Sendable {
     var diagnosticsUploadEnabled: Bool { get }
 }
 
+// #R005: Keep uploader configuration sendable across actor boundaries.
 public struct PistonConfiguration: Sendable {
     public var maxEventsPerBatch: Int
     public var maxBatchBytes: Int
@@ -12,6 +14,7 @@ public struct PistonConfiguration: Sendable {
     public var allowsCellularOrExpensiveNetwork: Bool
     public var userAgent: String
 
+    // #R010: Require explicit initializer fields for all operational uploader settings.
     public init(
         maxEventsPerBatch: Int,
         maxBatchBytes: Int,
@@ -28,6 +31,7 @@ public struct PistonConfiguration: Sendable {
         self.userAgent = userAgent
     }
 
+    // #R015: Provide conservative production defaults for batch sizing, timing, network policy, and user-agent.
     public static let `default` = PistonConfiguration(
         maxEventsPerBatch: 200,
         maxBatchBytes: 512 * 1024,

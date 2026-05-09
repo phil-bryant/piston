@@ -1,0 +1,12 @@
+#R001: Exclude local SwiftPM build artifacts from source control.
+.build/
+#R005: Exclude Xcode derived data and per-user workspace metadata.
+DerivedData/
+*.xcuserdatad/
+*.xcuserstate
+#R010: Keep Sources/, Tests/, and Package.swift tracked by not ignoring them here.
+#R015: Use `git rm -r --cached <path>` for tracked cache cleanup without deleting local files.
+#R020: Verify ignored artifact paths are untracked via `git ls-files | rg`.
+.DS_Store
+bin/*
+.cursor/rules/*

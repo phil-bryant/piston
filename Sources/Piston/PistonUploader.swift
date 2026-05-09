@@ -1,5 +1,6 @@
 import Foundation
 
+// #R001: Abstract HTTP transport so uploader can use injected deterministic test doubles.
 protocol PistonHTTPSession: Sendable {
     func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
@@ -9,6 +10,7 @@ extension URLSession: PistonHTTPSession {}
 public final class PistonUploader: @unchecked Sendable {
     private let loop: PistonUploadLoop
 
+    // #R010: Build URLSession from uploader configuration using ephemeral policy and configured timeout/network flags.
     public init(
         endpointURL: URL,
         configuration: PistonConfiguration,
@@ -30,6 +32,7 @@ public final class PistonUploader: @unchecked Sendable {
         )
     }
 
+    // #R015: Allow dependency injection of session and Fountain bridge for tests.
     init(
         endpointURL: URL,
         configuration: PistonConfiguration,
@@ -46,6 +49,7 @@ public final class PistonUploader: @unchecked Sendable {
         )
     }
 
+    // #R005: Expose uploader controls that delegate start/stop/flush behavior to the actor loop.
     public func start() {
         Task {
             await loop.start()
@@ -63,6 +67,7 @@ public final class PistonUploader: @unchecked Sendable {
     }
 }
 
+// #R020: Isolate upload loop state/coordination inside an actor.
 actor PistonUploadLoop {
     private let endpointURL: URL
     private let configuration: PistonConfiguration
@@ -92,6 +97,7 @@ actor PistonUploadLoop {
     }
 
     func start() {
+        // #R025: Start at most one periodic task and flush one batch per interval tick.
         guard periodicTask == nil else {
             return
         }
@@ -109,15 +115,18 @@ actor PistonUploadLoop {
     }
 
     func stop() {
+        // #R030: Cancel and clear periodic task reference for clean stop behavior.
         periodicTask?.cancel()
         periodicTask = nil
     }
 
     func flushNow(maxBatches: Int) async {
+        // #R040: Return immediately for non-positive counts and cap flush drain count to 5 batches.
         guard maxBatches > 0 else {
             return
         }
 
+        // #R035: Keep flush single-flight; additional callers await active flush completion.
         if isFlushing {
             await withCheckedContinuation { continuation in
                 flushWaiters.append(continuation)
@@ -143,10 +152,12 @@ actor PistonUploadLoop {
     }
 
     private func uploadOneBatch() async -> Bool {
+        // #R045: Gate claims by consent flag before attempting batch creation.
         guard consentProvider.diagnosticsUploadEnabled else {
             return false
         }
 
+        // #R050: Stop current flush gracefully when no batch is available.
         guard let batch = fountainBridge.createUploadBatch(
             maxEvents: configuration.maxEventsPerBatch,
             maxBytes: configuration.maxBatchBytes
@@ -154,6 +165,7 @@ actor PistonUploadLoop {
             return false
         }
 
+        // #R055: Finalize nil payloads as status-zero failure with explicit invalid-payload message.
         guard let body = batch.payload else {
             batch.finalize(.failed(httpStatus: 0, errorMessage: "Invalid payload"))
             return false
@@ -161,19 +173,24 @@ actor PistonUploadLoop {
 
         do {
             let statusCode = try await post(body: body)
+            // #R070: Mark 2xx uploads as success and continue batch drain.
             if (200..<300).contains(statusCode) {
                 batch.finalize(.succeeded)
                 return true
             }
 
+            // #R075: Mark non-2xx responses as failures and stop current flush.
             batch.finalize(.failed(httpStatus: statusCode, errorMessage: "HTTP \(statusCode)"))
             return false
         } catch {
+            // #R080: Mark transport errors as status-zero failures carrying error description.
             batch.finalize(.failed(httpStatus: 0, errorMessage: String(describing: error)))
             return false
         }
     }
 
+    // #R060: Post JSON payload bytes with configured timeout and required headers.
+    // #R065: Require HTTPURLResponse and propagate status code; throw badServerResponse for non-HTTP responses.
     private func post(body: Data) async throws -> Int {
         var request = URLRequest(url: endpointURL)
         request.httpMethod = "POST"
