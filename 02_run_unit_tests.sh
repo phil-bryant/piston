@@ -5,7 +5,7 @@ umask 007
 set -euo pipefail
 
 #R005: Refuse test execution when swift is unavailable on PATH.
-if ! swift_path="$(command -v swift)"; then
+if ! command -v swift >/dev/null 2>&1; then
     echo "swift is required but was not found on PATH."
     exit 1
 fi
@@ -21,7 +21,7 @@ if [ ! -f "${REPO_ROOT}/Package.swift" ]; then
 fi
 
 #R035: Refuse shell-test execution when bats is unavailable.
-if ! bats_path="$(command -v bats)"; then
+if ! command -v bats >/dev/null 2>&1; then
     echo "bats is required but was not found on PATH."
     exit 1
 fi

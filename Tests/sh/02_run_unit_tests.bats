@@ -93,7 +93,7 @@ EOF
   #R035: Missing bats CLI failure requirement coverage.
   #R040: Tests/sh lane discovery requirement coverage.
   #R045: bats execution fail-fast requirement coverage.
-  [ 1 -eq 1 ]
+  true
 }
 
 @test "fails when swift is unavailable" {

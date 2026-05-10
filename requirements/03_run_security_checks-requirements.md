@@ -10,7 +10,7 @@ Tests:
 - Invoke script from a non-repo working directory and verify reports are still emitted under repo-relative paths.
 
 R005  Statement: Support configurable report destination and per-lane toggles.
-Design: Resolve `SECURITY_REPORT_DIR`, `RUN_SHELLCHECK`, `RUN_SEMGREP`, `RUN_GITLEAKS`, `RUN_DETECT_SECRETS`,
+Design: Resolve `SECURITY_REPORT_DIR`, `RUN_SHELLCHECK`, `RUN_SEMGREP`, `RUN_GITLEAKS`, `RUN_DETECT_SCAN`,
 `RUN_SWIFTLINT`, and `SECURITY_FAIL_ON_FINDINGS` from environment variables with safe defaults and always create the
 report directory.
 Tests:

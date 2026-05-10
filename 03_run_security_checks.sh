@@ -11,7 +11,7 @@ REPORT_DIR="${SECURITY_REPORT_DIR:-./.security-reports}"
 RUN_SHELLCHECK="${RUN_SHELLCHECK:-true}"
 RUN_SEMGREP="${RUN_SEMGREP:-true}"
 RUN_GITLEAKS="${RUN_GITLEAKS:-true}"
-RUN_DETECT_SECRETS="${RUN_DETECT_SECRETS:-true}"
+RUN_DETECT_SCAN="${RUN_DETECT_SCAN:-true}"
 RUN_SWIFTLINT="${RUN_SWIFTLINT:-true}"
 FAIL_ON_FINDINGS="${SECURITY_FAIL_ON_FINDINGS:-true}"
 
@@ -335,7 +335,7 @@ if [[ "$RUN_GITLEAKS" == "true" ]]; then
   run_gitleaks_lane "${REPORT_DIR}/gitleaks.json"
 fi
 
-if [[ "$RUN_DETECT_SECRETS" == "true" ]]; then
+if [[ "$RUN_DETECT_SCAN" == "true" ]]; then
   run_detect_secrets_lane "${REPORT_DIR}/detect-secrets.json"
 fi
 
