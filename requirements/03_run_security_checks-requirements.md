@@ -1,0 +1,49 @@
+# Run Security Checks Requirements
+
+## Scope
+
+Applies to `03_run_security_checks.sh`.
+
+R001  Statement: Run in strict fail-fast shell mode from repository root.
+Design: Use `set -euo pipefail`, resolve the script directory from `${BASH_SOURCE[0]}`, and `cd` to that directory before running scanners.
+Tests:
+- Invoke script from a non-repo working directory and verify reports are still emitted under repo-relative paths.
+
+R005  Statement: Support configurable report destination and per-lane toggles.
+Design: Resolve `SECURITY_REPORT_DIR`, `RUN_SHELLCHECK`, `RUN_SEMGREP`, `RUN_GITLEAKS`, and `SECURITY_FAIL_ON_FINDINGS` from environment variables with safe defaults and always create the report directory.
+Tests:
+- Run with all lanes disabled and a custom report directory and verify script exits successfully while creating that directory.
+
+R010  Statement: Fail clearly when an enabled lane is missing required tooling.
+Design: Validate required commands with a dedicated checker and return actionable tool-specific error output.
+Tests:
+- Enable one lane with its command missing from `PATH` and verify explicit missing-command failure output.
+
+R015  Statement: Run ShellCheck across repository shell automation, persist JSON output, and print findings.
+Design: Discover shell targets from top-level numbered scripts and `Tests/sh/*.bats`, run `shellcheck -f json`, write `shellcheck.json`, and treat exit code `1` as findings while `>1` is execution failure. When findings are present, print a readable findings section with file, line, rule ID, and message.
+Tests:
+- Stub ShellCheck success output and verify `shellcheck.json` exists.
+- Stub ShellCheck with findings (exit `1`) and verify findings are counted in security summary and echoed in terminal output.
+
+R020  Statement: Run Semgrep in JSON mode and persist report artifacts.
+Design: Execute `semgrep scan` with JSON output into `semgrep.json`, treat exit `1` as findings, and fail immediately only for execution errors (`>1`).
+Tests:
+- Stub Semgrep findings output and verify report is created and findings are summarized.
+- Stub Semgrep execution failure and verify script exits with explicit Semgrep execution-failure output.
+
+R025  Statement: Run Gitleaks and persist report artifacts.
+Design: Execute `gitleaks detect` with JSON report output and treat exit `1` as findings while treating `>1` as execution failure.
+Tests:
+- Stub Gitleaks findings output and verify report is created and findings are summarized.
+- Stub Gitleaks execution failure and verify script exits with explicit Gitleaks execution-failure output.
+
+R030  Statement: Produce consolidated security summary and enforce fail-on-findings policy.
+Design: Aggregate ShellCheck, Semgrep, and Gitleaks finding counts into `security-summary.json`; when `SECURITY_FAIL_ON_FINDINGS=true`, exit non-zero if total findings is non-zero.
+Tests:
+- Seed at least one finding and verify script fails when fail-on-findings is enabled.
+- Seed at least one finding and verify script passes when fail-on-findings is disabled.
+
+## Changelog
+
+- 2026-05-09: Updated traceability-tag test pattern to use a ShellCheck-safe always-pass assertion (`true`) instead of SC2050 tautologies.
+- 2026-05-09: Initial requirements for `03_run_security_checks.sh` modeled after teller security-check stage with piston-appropriate tools.

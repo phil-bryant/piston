@@ -7,4 +7,8 @@ DerivedData/
 #R010: Keep sources, tests, and Package.swift tracked by not adding broad globs.
 #R015: Remove previously tracked artifacts with `git rm -r --cached` rather than deleting local files.
 #R020: Enforce that ignored artifact paths remain absent from `git ls-files`.
-#R025: Guard `.build/` ignore behavior with an automated shell test.
+#R025: Guard `.build/` and local security-report ignore behavior with automated shell checks.
+.security-reports/
+.DS_Store
+bin/*
+.cursor/rules/*
