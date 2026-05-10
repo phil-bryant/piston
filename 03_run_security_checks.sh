@@ -174,6 +174,7 @@ run_detect_secrets_lane() {
 run_swiftlint_lane() {
   local swiftlint_report_path="$1"
   local swiftlint_exit=0
+  local swiftlint_report_valid=0
   print_tool_header \
     "SwiftLint" \
     "Static linting for Swift style and safety diagnostics." \
@@ -186,11 +187,27 @@ run_swiftlint_lane() {
   swiftlint lint --reporter json > "$swiftlint_report_path"
   swiftlint_exit=$?
   set -e
-  if [[ "$swiftlint_exit" -gt 1 ]]; then
+  set +e
+  python3 - <<'PY' "$swiftlint_report_path"
+import json
+import sys
+from pathlib import Path
+
+report_path = Path(sys.argv[1])
+if not report_path.exists():
+    raise SystemExit(1)
+payload = json.loads(report_path.read_text(encoding="utf-8"))
+if not isinstance(payload, list):
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+  swiftlint_report_valid=$?
+  set -e
+  if [[ "$swiftlint_exit" -ne 0 && "$swiftlint_report_valid" -ne 0 ]]; then
     echo "❌ SwiftLint failed to execute."
     exit 1
   fi
-  if [[ "$swiftlint_exit" -eq 1 ]]; then
+  if [[ "$swiftlint_exit" -ne 0 && "$swiftlint_report_valid" -eq 0 ]]; then
     echo "⚠️  SwiftLint reported findings."
   fi
 }

@@ -46,11 +46,12 @@ Tests:
 - Stub detect-secrets execution failure and verify script exits with explicit detect-secrets execution-failure output.
 
 R040  Statement: Run SwiftLint in JSON mode and persist report artifacts.
-Design: Execute `swiftlint lint --reporter json`, write `swiftlint.json`, treat exit `1` as findings, and treat `>1`
-as execution failure.
+Design: Execute `swiftlint lint --reporter json` and write `swiftlint.json`. When SwiftLint exits non-zero, treat it as findings
+if `swiftlint.json` contains a valid JSON list payload; treat it as execution failure only when non-zero exit is accompanied by
+an invalid or missing JSON report.
 Tests:
-- Stub SwiftLint findings output and verify report is created and findings are summarized.
-- Stub SwiftLint execution failure and verify script exits with explicit SwiftLint execution-failure output.
+- Stub SwiftLint findings output with non-zero exit and valid JSON and verify findings are summarized.
+- Stub SwiftLint execution failure with non-zero exit and invalid/missing report and verify explicit execution-failure output.
 
 R045  Statement: Print a manifold-style tool explainer header before each enabled tool lane executes.
 Design: Emit the boxed manifold-style header with `Security Tool: <name>`, two explainer lines, and `URL: <tool-doc-url>`

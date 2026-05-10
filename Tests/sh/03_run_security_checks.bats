@@ -117,7 +117,7 @@ write_swiftlint_stub_with_findings() {
 #!/usr/bin/env bash
 echo "swiftlint $*" >> "${CALLS_LOG}"
 printf '%s' '[{"file":"Sources/Piston/PistonUploader.swift","line":10,"reason":"Example rule"}]'
-exit 1
+exit 2
 EOF
   chmod +x "${STUB_BIN}/swiftlint"
 }
@@ -232,7 +232,7 @@ EOF
 }
 
 @test "R040: swiftlint execution failure exits with explicit error" {
-  #R040: Verifies SwiftLint execution-failure path for exit code > 1.
+  #R040: Verifies SwiftLint execution-failure path when no valid JSON report is emitted.
   write_shellcheck_stub_clean
   write_swiftlint_stub_exec_failure
   run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SECRETS=false RUN_SWIFTLINT=true \
