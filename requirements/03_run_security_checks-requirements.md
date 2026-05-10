@@ -40,9 +40,10 @@ Tests:
 - Stub Gitleaks execution failure and verify script exits with explicit Gitleaks execution-failure output.
 
 R035  Statement: Run detect-secrets and persist report artifacts.
-Design: Execute `detect-secrets scan --all-files`, write `detect-secrets.json`, and fail when command execution fails.
+Design: Execute `detect-secrets scan --all-files`, write `detect-secrets.json`, and fail when command execution fails. When findings exist in `results`, print a readable detect-secrets findings section immediately after the detect-secrets lane output and before any next tool header; for each finding, print file/line/type and the matched source line directly beneath it.
 Tests:
 - Stub detect-secrets success output and verify report is created and findings are summarized from `results`.
+- Stub detect-secrets findings output and verify each finding prints with its source line directly below it before the next tool header.
 - Stub detect-secrets execution failure and verify script exits with explicit detect-secrets execution-failure output.
 
 R040  Statement: Run SwiftLint in JSON mode and persist report artifacts.

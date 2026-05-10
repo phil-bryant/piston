@@ -168,6 +168,39 @@ run_detect_secrets_lane() {
     echo "❌ detect-secrets failed to execute."
     exit 1
   fi
+  python3 - <<'PY' "$detect_secrets_report_path"
+import json
+import sys
+from pathlib import Path
+
+report_path = Path(sys.argv[1])
+payload = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
+results = payload.get("results") if isinstance(payload, dict) else {}
+entries = []
+if isinstance(results, dict):
+    for file_path, file_findings in results.items():
+        if isinstance(file_findings, list):
+            for finding in file_findings:
+                if isinstance(finding, dict):
+                    line_number = int(finding.get("line_number", 0))
+                    secret_type = str(finding.get("type", "unknown"))
+                    entries.append((str(file_path), line_number, secret_type))
+entries.sort(key=lambda item: (item[0], item[1], item[2]))
+if len(entries) > 0:
+    print("⚠️  detect-secrets reported findings.")
+    print("detect-secrets findings")
+for file_path, line_number, secret_type in entries:
+    print(f"- {file_path}:{line_number} [{secret_type}]")
+    resolved_path = Path(file_path)
+    if not resolved_path.is_absolute():
+        resolved_path = Path.cwd() / resolved_path
+    source_line = "<unavailable>"
+    if line_number > 0 and resolved_path.exists():
+        file_lines = resolved_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        if line_number <= len(file_lines):
+            source_line = file_lines[line_number - 1]
+    print(f"  source: {source_line}")
+PY
 }
 
 #R040: Run SwiftLint in JSON mode and persist report.

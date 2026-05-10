@@ -2,41 +2,41 @@ import Foundation
 
 // #R001: Mirror C batch fields and defaults.
 public struct FountainUploadBatch {
-    public var batch_id: UnsafeMutablePointer<CChar>?
-    public var json_payload: UnsafeMutablePointer<CChar>?
-    public var json_payload_length: Int
+    public var batchId: UnsafeMutablePointer<CChar>?
+    public var jsonPayload: UnsafeMutablePointer<CChar>?
+    public var jsonPayloadLength: Int
 
     public init(
-        batch_id: UnsafeMutablePointer<CChar>? = nil,
-        json_payload: UnsafeMutablePointer<CChar>? = nil,
-        json_payload_length: Int = 0
+        batchId: UnsafeMutablePointer<CChar>? = nil,
+        jsonPayload: UnsafeMutablePointer<CChar>? = nil,
+        jsonPayloadLength: Int = 0
     ) {
-        self.batch_id = batch_id
-        self.json_payload = json_payload
-        self.json_payload_length = json_payload_length
+        self.batchId = batchId
+        self.jsonPayload = jsonPayload
+        self.jsonPayloadLength = jsonPayloadLength
     }
 }
 
 // #R005: Bind exact ABI symbols for create/mark/free operations.
 @_silgen_name("FountainCreateUploadBatch")
-private func FountainCreateUploadBatchC(
+private func fountainCreateUploadBatchC(
     _ maxEvents: Int,
     _ maxBytes: Int,
     _ outBatch: UnsafeMutablePointer<FountainUploadBatch>
 ) -> Bool
 
 @_silgen_name("FountainMarkUploadBatchSucceeded")
-private func FountainMarkUploadBatchSucceededC(_ batchID: UnsafePointer<CChar>)
+private func fountainMarkUploadBatchSucceededC(_ batchID: UnsafePointer<CChar>)
 
 @_silgen_name("FountainMarkUploadBatchFailed")
-private func FountainMarkUploadBatchFailedC(
+private func fountainMarkUploadBatchFailedC(
     _ batchID: UnsafePointer<CChar>,
     _ httpStatus: Int32,
     _ errorMessage: UnsafePointer<CChar>
 )
 
 @_silgen_name("FountainFreeUploadBatch")
-private func FountainFreeUploadBatchC(_ batch: UnsafeMutablePointer<FountainUploadBatch>)
+private func fountainFreeUploadBatchC(_ batch: UnsafeMutablePointer<FountainUploadBatch>)
 
 // #R010: Model finalize outcomes for success/failure paths.
 enum FountainBatchResult {
@@ -60,24 +60,24 @@ struct CFountainUploadBatchBridge: FountainUploadBatchBridging {
     func createUploadBatch(maxEvents: Int, maxBytes: Int) -> ClaimedUploadBatch? {
         var raw = FountainUploadBatch()
         // #R025: Return nil immediately when C reports no work.
-        let hasBatch = FountainCreateUploadBatchC(maxEvents, maxBytes, &raw)
+        let hasBatch = fountainCreateUploadBatchC(maxEvents, maxBytes, &raw)
         guard hasBatch else {
             return nil
         }
 
         // #R030: Free null-id raw batches to avoid leaks.
-        guard let idPtr = raw.batch_id else {
-            FountainFreeUploadBatchC(&raw)
+        guard let idPtr = raw.batchId else {
+            fountainFreeUploadBatchC(&raw)
             return nil
         }
 
         let batchID = String(cString: idPtr)
         // #R035: Copy payload bytes exactly with explicit invalid-state handling.
         let payload: Data?
-        if raw.json_payload_length == 0 {
+        if raw.jsonPayloadLength == 0 {
             payload = Data()
-        } else if let payloadPtr = raw.json_payload, raw.json_payload_length > 0 {
-            payload = Data(bytes: payloadPtr, count: raw.json_payload_length)
+        } else if let payloadPtr = raw.jsonPayload, raw.jsonPayloadLength > 0 {
+            payload = Data(bytes: payloadPtr, count: raw.jsonPayloadLength)
         } else {
             payload = nil
         }
@@ -97,16 +97,16 @@ struct CFountainUploadBatchBridge: FountainUploadBatchBridging {
             switch result {
             // #R045: Route mark result then free batch allocation.
             case .succeeded:
-                batchID.withCString { FountainMarkUploadBatchSucceededC($0) }
+                batchID.withCString { fountainMarkUploadBatchSucceededC($0) }
             case let .failed(httpStatus, errorMessage):
                 batchID.withCString { batchIDCString in
                     errorMessage.withCString { errorCString in
-                        FountainMarkUploadBatchFailedC(batchIDCString, Int32(httpStatus), errorCString)
+                        fountainMarkUploadBatchFailedC(batchIDCString, Int32(httpStatus), errorCString)
                     }
                 }
             }
 
-            FountainFreeUploadBatchC(&raw)
+            fountainFreeUploadBatchC(&raw)
         }
 
         return ClaimedUploadBatch(batchID: batchID, payload: payload, finalize: finalize)

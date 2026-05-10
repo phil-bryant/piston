@@ -97,7 +97,7 @@ write_detect_secrets_stub_with_findings() {
   cat > "${STUB_BIN}/detect-secrets" <<'EOF'
 #!/usr/bin/env bash
 echo "detect-secrets $*" >> "${CALLS_LOG}"
-printf '%s' '{"results":{"Secrets.txt":[{"type":"Secret Keyword","line_number":1}]}}'
+printf '%s' '{"results":{"03_run_security_checks.sh":[{"type":"Secret Keyword","line_number":1}]}}'
 exit 0
 EOF
   chmod +x "${STUB_BIN}/detect-secrets"
@@ -229,6 +229,28 @@ EOF
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 1 ]
   [[ "${output}" == *"detect-secrets failed to execute."* ]]
+}
+
+@test "R035: detect-secrets prints findings with source lines before the next tool header" {
+  #R035: Verifies inline finding output includes source lines for each detect-secrets match.
+  #R045: Verifies detect-secrets findings print before subsequent tool headers.
+  write_shellcheck_stub_clean
+  write_detect_secrets_stub_with_findings
+  write_swiftlint_stub_with_findings
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SECRETS=true RUN_SWIFTLINT=true SECURITY_FAIL_ON_FINDINGS=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 0 ]
+  [[ "${output}" == *"detect-secrets findings"* ]]
+  [[ "${output}" == *"- 03_run_security_checks.sh:1 [Secret Keyword]"* ]]
+  [[ "${output}" == *"  source: #!/usr/bin/env bash"* ]]
+  detect_finding_line="$(printf '%s\n' "${output}" | /usr/bin/awk '/^- 03_run_security_checks.sh:1 \[Secret Keyword\]/{print NR; exit}')"
+  detect_source_line="$(printf '%s\n' "${output}" | /usr/bin/awk '/^  source: #!\/usr\/bin\/env bash$/{print NR; exit}')"
+  swiftlint_header_line="$(printf '%s\n' "${output}" | /usr/bin/awk '/Security Tool: SwiftLint/{print NR; exit}')"
+  [ -n "${detect_finding_line}" ]
+  [ -n "${detect_source_line}" ]
+  [ -n "${swiftlint_header_line}" ]
+  [ "${detect_source_line}" -eq "$((detect_finding_line + 1))" ]
+  [ "${detect_source_line}" -lt "${swiftlint_header_line}" ]
 }
 
 @test "R040: swiftlint execution failure exits with explicit error" {
