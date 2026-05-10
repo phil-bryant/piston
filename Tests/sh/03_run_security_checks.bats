@@ -93,6 +93,44 @@ EOF
   chmod +x "${STUB_BIN}/gitleaks"
 }
 
+write_detect_secrets_stub_with_findings() {
+  cat > "${STUB_BIN}/detect-secrets" <<'EOF'
+#!/usr/bin/env bash
+echo "detect-secrets $*" >> "${CALLS_LOG}"
+printf '%s' '{"results":{"Secrets.txt":[{"type":"Secret Keyword","line_number":1}]}}'
+exit 0
+EOF
+  chmod +x "${STUB_BIN}/detect-secrets"
+}
+
+write_detect_secrets_stub_exec_failure() {
+  cat > "${STUB_BIN}/detect-secrets" <<'EOF'
+#!/usr/bin/env bash
+echo "detect-secrets $*" >> "${CALLS_LOG}"
+exit 2
+EOF
+  chmod +x "${STUB_BIN}/detect-secrets"
+}
+
+write_swiftlint_stub_with_findings() {
+  cat > "${STUB_BIN}/swiftlint" <<'EOF'
+#!/usr/bin/env bash
+echo "swiftlint $*" >> "${CALLS_LOG}"
+printf '%s' '[{"file":"Sources/Piston/PistonUploader.swift","line":10,"reason":"Example rule"}]'
+exit 1
+EOF
+  chmod +x "${STUB_BIN}/swiftlint"
+}
+
+write_swiftlint_stub_exec_failure() {
+  cat > "${STUB_BIN}/swiftlint" <<'EOF'
+#!/usr/bin/env bash
+echo "swiftlint $*" >> "${CALLS_LOG}"
+exit 2
+EOF
+  chmod +x "${STUB_BIN}/swiftlint"
+}
+
 @test "Traceability tags for security-check requirements" {
   #R001: Strict mode and repository-root execution coverage.
   #R005: Lane toggles and report directory configuration coverage.
@@ -100,6 +138,9 @@ EOF
   #R015: ShellCheck execution and report persistence coverage.
   #R020: Semgrep execution/report behavior coverage.
   #R025: Gitleaks execution/report behavior coverage.
+  #R035: detect-secrets execution/report behavior coverage.
+  #R040: SwiftLint execution/report behavior coverage.
+  #R045: Per-tool explainer header output coverage.
   #R030: Consolidated summary and fail-on-findings policy coverage.
   true
 }
@@ -109,7 +150,7 @@ EOF
   #R005: Verifies custom report directory and lane toggles.
   mkdir -p "${TMP_ROOT}/outside"
   cd "${TMP_ROOT}/outside"
-  run env PATH="/usr/bin:/bin" RUN_SHELLCHECK=false RUN_SEMGREP=false RUN_GITLEAKS=false \
+  run env PATH="/usr/bin:/bin" RUN_SHELLCHECK=false RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SECRETS=false RUN_SWIFTLINT=false \
     SECURITY_REPORT_DIR="${FIXTURE_ROOT}/custom-reports" /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 0 ]
   [ -d "${FIXTURE_ROOT}/custom-reports" ]
@@ -118,7 +159,7 @@ EOF
 
 @test "R010: fails clearly when enabled lane command is missing" {
   #R010: Verifies explicit missing-command guidance.
-  run env PATH="/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false \
+  run env PATH="/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SECRETS=false RUN_SWIFTLINT=false \
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 1 ]
   [[ "${output}" == *"Missing required command: shellcheck"* ]]
@@ -128,7 +169,7 @@ EOF
   #R015: Verifies shellcheck lane writes JSON report.
   #R030: Verifies fail-on-findings gate behavior.
   write_shellcheck_stub_with_findings
-  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SEMGREP=false RUN_GITLEAKS=false SECURITY_FAIL_ON_FINDINGS=true \
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SECRETS=false RUN_SWIFTLINT=false SECURITY_FAIL_ON_FINDINGS=true \
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 1 ]
   [ -f "${FIXTURE_ROOT}/.security-reports/shellcheck.json" ]
@@ -144,21 +185,26 @@ EOF
   write_shellcheck_stub_clean
   write_semgrep_stub_with_findings
   write_gitleaks_stub_with_findings
-  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true SECURITY_FAIL_ON_FINDINGS=false \
+  write_detect_secrets_stub_with_findings
+  write_swiftlint_stub_with_findings
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true RUN_DETECT_SECRETS=true RUN_SWIFTLINT=true SECURITY_FAIL_ON_FINDINGS=false \
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 0 ]
   [ -f "${FIXTURE_ROOT}/.security-reports/semgrep.json" ]
   [ -f "${FIXTURE_ROOT}/.security-reports/gitleaks.json" ]
+  [ -f "${FIXTURE_ROOT}/.security-reports/detect-secrets.json" ]
+  [ -f "${FIXTURE_ROOT}/.security-reports/swiftlint.json" ]
   [ -f "${FIXTURE_ROOT}/.security-reports/security-summary.json" ]
   [[ "${output}" == *"Semgrep reported findings."* ]]
   [[ "${output}" == *"Gitleaks reported findings."* ]]
+  [[ "${output}" == *"SwiftLint reported findings."* ]]
 }
 
 @test "R020: semgrep execution failure exits with explicit error" {
   #R020: Verifies semgrep execution-failure path for exit code > 1.
   write_shellcheck_stub_clean
   write_semgrep_stub_exec_failure
-  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=false \
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=false RUN_DETECT_SECRETS=false RUN_SWIFTLINT=false \
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 1 ]
   [[ "${output}" == *"Semgrep failed to execute."* ]]
@@ -169,8 +215,45 @@ EOF
   write_shellcheck_stub_clean
   write_semgrep_stub_with_findings
   write_gitleaks_stub_exec_failure
-  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true SECURITY_FAIL_ON_FINDINGS=false \
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true RUN_DETECT_SECRETS=false RUN_SWIFTLINT=false SECURITY_FAIL_ON_FINDINGS=false \
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 1 ]
   [[ "${output}" == *"Gitleaks failed to execute."* ]]
+}
+
+@test "R035: detect-secrets execution failure exits with explicit error" {
+  #R035: Verifies detect-secrets execution-failure path.
+  write_shellcheck_stub_clean
+  write_detect_secrets_stub_exec_failure
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SECRETS=true RUN_SWIFTLINT=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 1 ]
+  [[ "${output}" == *"detect-secrets failed to execute."* ]]
+}
+
+@test "R040: swiftlint execution failure exits with explicit error" {
+  #R040: Verifies SwiftLint execution-failure path for exit code > 1.
+  write_shellcheck_stub_clean
+  write_swiftlint_stub_exec_failure
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SECRETS=false RUN_SWIFTLINT=true \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 1 ]
+  [[ "${output}" == *"SwiftLint failed to execute."* ]]
+}
+
+@test "R045: prints tool explainer header before each enabled lane runs" {
+  #R045: Verifies each enabled lane emits tool name, purpose, and report-path header.
+  write_shellcheck_stub_clean
+  write_semgrep_stub_with_findings
+  write_gitleaks_stub_with_findings
+  write_detect_secrets_stub_with_findings
+  write_swiftlint_stub_with_findings
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true RUN_DETECT_SECRETS=true RUN_SWIFTLINT=true SECURITY_FAIL_ON_FINDINGS=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 0 ]
+  [[ "${output}" == *"--- ShellCheck ---"* ]]
+  [[ "${output}" == *"--- Semgrep ---"* ]]
+  [[ "${output}" == *"--- Gitleaks ---"* ]]
+  [[ "${output}" == *"--- detect-secrets ---"* ]]
+  [[ "${output}" == *"--- SwiftLint ---"* ]]
 }

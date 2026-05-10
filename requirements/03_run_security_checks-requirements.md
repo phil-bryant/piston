@@ -10,7 +10,9 @@ Tests:
 - Invoke script from a non-repo working directory and verify reports are still emitted under repo-relative paths.
 
 R005  Statement: Support configurable report destination and per-lane toggles.
-Design: Resolve `SECURITY_REPORT_DIR`, `RUN_SHELLCHECK`, `RUN_SEMGREP`, `RUN_GITLEAKS`, and `SECURITY_FAIL_ON_FINDINGS` from environment variables with safe defaults and always create the report directory.
+Design: Resolve `SECURITY_REPORT_DIR`, `RUN_SHELLCHECK`, `RUN_SEMGREP`, `RUN_GITLEAKS`, `RUN_DETECT_SECRETS`,
+`RUN_SWIFTLINT`, and `SECURITY_FAIL_ON_FINDINGS` from environment variables with safe defaults and always create the
+report directory.
 Tests:
 - Run with all lanes disabled and a custom report directory and verify script exits successfully while creating that directory.
 
@@ -37,13 +39,34 @@ Tests:
 - Stub Gitleaks findings output and verify report is created and findings are summarized.
 - Stub Gitleaks execution failure and verify script exits with explicit Gitleaks execution-failure output.
 
+R035  Statement: Run detect-secrets and persist report artifacts.
+Design: Execute `detect-secrets scan --all-files`, write `detect-secrets.json`, and fail when command execution fails.
+Tests:
+- Stub detect-secrets success output and verify report is created and findings are summarized from `results`.
+- Stub detect-secrets execution failure and verify script exits with explicit detect-secrets execution-failure output.
+
+R040  Statement: Run SwiftLint in JSON mode and persist report artifacts.
+Design: Execute `swiftlint lint --reporter json`, write `swiftlint.json`, treat exit `1` as findings, and treat `>1`
+as execution failure.
+Tests:
+- Stub SwiftLint findings output and verify report is created and findings are summarized.
+- Stub SwiftLint execution failure and verify script exits with explicit SwiftLint execution-failure output.
+
+R045  Statement: Print a tool explainer header before each enabled tool lane executes.
+Design: Emit a concise header before each tool command with tool name, purpose, and target report path.
+Tests:
+- Enable all lanes with stubs and verify output contains one explainer header for each tool before execution output.
+
 R030  Statement: Produce consolidated security summary and enforce fail-on-findings policy.
-Design: Aggregate ShellCheck, Semgrep, and Gitleaks finding counts into `security-summary.json`; when `SECURITY_FAIL_ON_FINDINGS=true`, exit non-zero if total findings is non-zero.
+Design: Aggregate ShellCheck, Semgrep, Gitleaks, detect-secrets, and SwiftLint finding counts into
+`security-summary.json`; when `SECURITY_FAIL_ON_FINDINGS=true`, exit non-zero if total findings is non-zero.
 Tests:
 - Seed at least one finding and verify script fails when fail-on-findings is enabled.
 - Seed at least one finding and verify script passes when fail-on-findings is disabled.
 
 ## Changelog
 
+- 2026-05-10: Added tool explainer-header requirement for each enabled security lane.
+- 2026-05-10: Added detect-secrets and SwiftLint lanes with report and summary requirements.
 - 2026-05-09: Updated traceability-tag test pattern to use a ShellCheck-safe always-pass assertion (`true`) instead of SC2050 tautologies.
 - 2026-05-09: Initial requirements for `03_run_security_checks.sh` modeled after teller security-check stage with piston-appropriate tools.
