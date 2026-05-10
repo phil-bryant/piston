@@ -29,14 +29,19 @@ require_command() {
   exit 1
 }
 
-#R045: Print per-tool explainer header before each lane execution.
-print_tool_explainer_header() {
+#R045: Print manifold-style tool explainer header before each lane execution.
+print_tool_header() {
   local tool_name="$1"
-  local purpose="$2"
-  local report_path="$3"
-  echo "--- ${tool_name} ---"
-  echo "Purpose: ${purpose}"
-  echo "Report: ${report_path}"
+  local explainer_line_1="$2"
+  local explainer_line_2="$3"
+  local tool_url="$4"
+  local border="+==============================================================================+"
+  printf '%s\n' "$border"
+  printf '| %-76s |\n' "Security Tool: ${tool_name}"
+  printf '| %-76s |\n' "${explainer_line_1}"
+  printf '| %-76s |\n' "${explainer_line_2}"
+  printf '| %-76s |\n' "URL: ${tool_url}"
+  printf '%s\n' "$border"
 }
 
 #R015: Run ShellCheck on repo shell automation and persist JSON report.
@@ -54,7 +59,12 @@ run_shellcheck_lane() {
     echo "ℹ️  ShellCheck skipped: no shell targets discovered."
     return 0
   fi
-  print_tool_explainer_header "ShellCheck" "Static analysis for shell scripts." "$shellcheck_report_path"
+  print_tool_header \
+    "ShellCheck" \
+    "Static linting for shell scripts with security and reliability checks." \
+    "Flags risky shell patterns, quoting bugs, and execution pitfalls." \
+    "https://www.shellcheck.net/"
+  echo "Report: ${shellcheck_report_path}"
   require_command "shellcheck" "brew install shellcheck"
   echo "▶ Running ShellCheck"
   set +e
@@ -92,7 +102,12 @@ PY
 run_semgrep_lane() {
   local semgrep_report_path="$1"
   local semgrep_exit=0
-  print_tool_explainer_header "Semgrep" "SAST scanning for code patterns." "$semgrep_report_path"
+  print_tool_header \
+    "Semgrep" \
+    "Static pattern-based scanning for security and correctness issues." \
+    "Uses curated security rules against the repository source tree." \
+    "https://semgrep.dev/docs/"
+  echo "Report: ${semgrep_report_path}"
   require_command "semgrep" "brew install semgrep"
   echo "▶ Running Semgrep"
   set +e
@@ -112,7 +127,12 @@ run_semgrep_lane() {
 run_gitleaks_lane() {
   local gitleaks_report_path="$1"
   local gitleaks_exit=0
-  print_tool_explainer_header "Gitleaks" "Secret detection from git content." "$gitleaks_report_path"
+  print_tool_header \
+    "Gitleaks" \
+    "Scans repository content for hard-coded secrets and credentials." \
+    "Detects leaked tokens, keys, and other sensitive data patterns." \
+    "https://github.com/gitleaks/gitleaks"
+  echo "Report: ${gitleaks_report_path}"
   require_command "gitleaks" "brew install gitleaks"
   echo "▶ Running Gitleaks"
   set +e
@@ -132,7 +152,12 @@ run_gitleaks_lane() {
 run_detect_secrets_lane() {
   local detect_secrets_report_path="$1"
   local detect_secrets_exit=0
-  print_tool_explainer_header "detect-secrets" "Entropy and keyword secret scanning." "$detect_secrets_report_path"
+  print_tool_header \
+    "detect-secrets" \
+    "Scans repository files for high-entropy and known secret formats." \
+    "Helps catch accidentally committed credentials before release." \
+    "https://github.com/Yelp/detect-secrets"
+  echo "Report: ${detect_secrets_report_path}"
   require_command "detect-secrets" "pip install detect-secrets"
   echo "▶ Running detect-secrets"
   set +e
@@ -149,7 +174,12 @@ run_detect_secrets_lane() {
 run_swiftlint_lane() {
   local swiftlint_report_path="$1"
   local swiftlint_exit=0
-  print_tool_explainer_header "SwiftLint" "Swift style and lint diagnostics." "$swiftlint_report_path"
+  print_tool_header \
+    "SwiftLint" \
+    "Static linting for Swift style and safety diagnostics." \
+    "Flags style violations and risky coding patterns in Swift files." \
+    "https://github.com/realm/SwiftLint"
+  echo "Report: ${swiftlint_report_path}"
   require_command "swiftlint" "brew install swiftlint"
   echo "▶ Running SwiftLint"
   set +e

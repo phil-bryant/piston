@@ -52,10 +52,12 @@ Tests:
 - Stub SwiftLint findings output and verify report is created and findings are summarized.
 - Stub SwiftLint execution failure and verify script exits with explicit SwiftLint execution-failure output.
 
-R045  Statement: Print a tool explainer header before each enabled tool lane executes.
-Design: Emit a concise header before each tool command with tool name, purpose, and target report path.
+R045  Statement: Print a manifold-style tool explainer header before each enabled tool lane executes.
+Design: Emit the boxed manifold-style header with `Security Tool: <name>`, two explainer lines, and `URL: <tool-doc-url>`
+before each enabled tool command; print report path as a separate line immediately after the header.
 Tests:
-- Enable all lanes with stubs and verify output contains one explainer header for each tool before execution output.
+- Enable all lanes with stubs and verify output contains one boxed header for each tool with `Security Tool:` and `URL:`
+  fields before execution output.
 
 R030  Statement: Produce consolidated security summary and enforce fail-on-findings policy.
 Design: Aggregate ShellCheck, Semgrep, Gitleaks, detect-secrets, and SwiftLint finding counts into

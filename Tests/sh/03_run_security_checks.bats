@@ -251,9 +251,15 @@ EOF
   run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=true RUN_GITLEAKS=true RUN_DETECT_SECRETS=true RUN_SWIFTLINT=true SECURITY_FAIL_ON_FINDINGS=false \
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 0 ]
-  [[ "${output}" == *"--- ShellCheck ---"* ]]
-  [[ "${output}" == *"--- Semgrep ---"* ]]
-  [[ "${output}" == *"--- Gitleaks ---"* ]]
-  [[ "${output}" == *"--- detect-secrets ---"* ]]
-  [[ "${output}" == *"--- SwiftLint ---"* ]]
+  [[ "${output}" == *"+==============================================================================+"* ]]
+  [[ "${output}" == *"Security Tool: ShellCheck"* ]]
+  [[ "${output}" == *"Security Tool: Semgrep"* ]]
+  [[ "${output}" == *"Security Tool: Gitleaks"* ]]
+  [[ "${output}" == *"Security Tool: detect-secrets"* ]]
+  [[ "${output}" == *"Security Tool: SwiftLint"* ]]
+  [[ "${output}" == *"URL: https://www.shellcheck.net/"* ]]
+  [[ "${output}" == *"URL: https://semgrep.dev/docs/"* ]]
+  [[ "${output}" == *"URL: https://github.com/gitleaks/gitleaks"* ]]
+  [[ "${output}" == *"URL: https://github.com/Yelp/detect-secrets"* ]]
+  [[ "${output}" == *"URL: https://github.com/realm/SwiftLint"* ]]
 }
