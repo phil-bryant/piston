@@ -2,6 +2,23 @@ import Foundation
 import XCTest
 @testable import Piston
 
+// #R001: Trace tests for consent/transport/bridge basics.
+// #R005: Trace tests for uploader controls and sendable config behaviors.
+// #R010: Trace tests for explicit config/session setup behavior.
+// #R015: Trace tests for injected dependencies and defaults coverage.
+// #R020: Trace tests for actor-isolated flush/periodic orchestration.
+// #R025: Trace tests for single periodic start semantics.
+// #R030: Trace tests for clean stop semantics.
+// #R035: Trace tests for single-flight flush behavior.
+// #R040: Trace tests for bounded flush drain.
+// #R045: Trace tests for consent gating and finalize routing.
+// #R050: Trace tests for nil-batch stop behavior.
+// #R055: Trace tests for invalid payload failure behavior.
+// #R060: Trace tests for JSON POST request construction.
+// #R065: Trace tests for HTTP response validation behavior.
+// #R070: Trace tests for 2xx success finalization.
+// #R075: Trace tests for non-2xx failure finalization.
+// #R080: Trace tests for network-failure status-zero finalization.
 final class PistonUploaderTests: XCTestCase {
     func testConsentDisabledDoesNotClaimBatch() async {
         let consent = MutableConsentProvider(enabled: false)
