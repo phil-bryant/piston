@@ -19,6 +19,7 @@ import XCTest
 // #R070: Trace tests for 2xx success finalization.
 // #R075: Trace tests for non-2xx failure finalization.
 // #R080: Trace tests for network-failure status-zero finalization.
+// #R085: Trace tests for explicit flush-stop reason logging.
 final class PistonUploaderTests: XCTestCase {
     func testTraceabilityTagsForPistonRequirements() {
         // #R001: Transport abstraction, consent protocol, and bridge batch field modeling coverage.
@@ -38,6 +39,7 @@ final class PistonUploaderTests: XCTestCase {
         // #R070: 2xx success finalization behavior coverage.
         // #R075: Non-2xx failure finalization behavior coverage.
         // #R080: Network-error status-zero failure behavior coverage.
+        // #R085: Explicit flush-stop reason logging coverage.
         XCTAssertTrue(true)
     }
 
@@ -142,6 +144,24 @@ final class PistonUploaderTests: XCTestCase {
         XCTAssertEqual(maxConcurrentRequests, 1)
     }
 
+    func testFlushEndLogsExplicitNoBatchReason() async {
+        let consent = MutableConsentProvider(enabled: true)
+        let bridge = MockFountainBridge(queued: [])
+        let session = MockHTTPSession(result: .success(HTTPURLResponse(statusCode: 200)))
+        let logs = LockedLogRecorder()
+        let uploader = makeUploader(
+            consent: consent,
+            bridge: bridge,
+            session: session,
+            statusLogger: { logs.append($0) }
+        )
+
+        await uploader.flushNow()
+
+        XCTAssertTrue(logs.contains("flush end reason=no_batch"))
+        XCTAssertFalse(logs.contains("flush end reason=no_more_work_or_error"))
+    }
+
     private func assertHTTPFailureStatus(_ status: Int) async {
         let consent = MutableConsentProvider(enabled: true)
         let bridge = MockFountainBridge(
@@ -161,7 +181,8 @@ final class PistonUploaderTests: XCTestCase {
     private func makeUploader(
         consent: MutableConsentProvider,
         bridge: MockFountainBridge,
-        session: PistonHTTPSession
+        session: PistonHTTPSession,
+        statusLogger: @escaping PistonStatusLogger = { _ in }
     ) -> PistonUploader {
         PistonUploader(
             endpointURL: URL(string: "https://example.com/ingest")!,
@@ -175,8 +196,26 @@ final class PistonUploaderTests: XCTestCase {
             ),
             consentProvider: consent,
             session: session,
-            fountainBridge: bridge
+            fountainBridge: bridge,
+            statusLogger: statusLogger
         )
+    }
+}
+
+private final class LockedLogRecorder: @unchecked Sendable {
+    private var entries: [String] = []
+    private let lock = NSLock()
+
+    func append(_ value: String) {
+        lock.withLock {
+            entries.append(value)
+        }
+    }
+
+    func contains(_ fragment: String) -> Bool {
+        lock.withLock {
+            entries.contains { $0.contains(fragment) }
+        }
     }
 }
 

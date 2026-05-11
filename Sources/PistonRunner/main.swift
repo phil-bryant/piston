@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Piston
 
 private struct RunnerConsentProvider: DiagnosticsConsentProvider {
@@ -14,10 +15,20 @@ enum RunnerError: Error {
 struct PistonRunnerMain {
     static func main() async {
         do {
+            setbuf(stdout, nil)
+            setbuf(stderr, nil)
             let environment = ProcessInfo.processInfo.environment
-            let discoveryURL = try requiredURL(environment, key: "VALVE_DISCOVERY_URL")
-            let installID = try requiredString(environment, key: "PISTON_INSTALL_ID")
-            let credential = try requiredString(environment, key: "PISTON_INSTALL_CREDENTIAL")
+            let manualUploadTarget = parseURL(environment["MANIFOLD_UPLOAD_URL"])
+            let insecureHTTPMode = manualUploadTarget?.scheme?.lowercased() == "http"
+
+            let discoveryURL = try resolveDiscoveryURL(
+                environment,
+                manualUploadTarget: manualUploadTarget,
+                insecureHTTPMode: insecureHTTPMode
+            )
+            let installID = try resolveInstallID(environment, insecureHTTPMode: insecureHTTPMode)
+            let credential = try resolveCredential(environment, insecureHTTPMode: insecureHTTPMode)
+            configureFountainRuntime(environment: environment, installID: installID)
             let cachePath = environment["PISTON_UPLOAD_TARGET_CACHE"] ?? ".piston/upload-target-cache.json"
             let cacheURL = URL(fileURLWithPath: cachePath)
 
@@ -58,11 +69,16 @@ struct PistonRunnerMain {
 
             uploader.start()
             print("Piston startup: uploader started")
-            dispatchMain()
+            parkForever()
         } catch {
             print("Piston startup failed: \(error)")
             exit(1)
         }
+    }
+
+    private static func parkForever() {
+        let semaphore = DispatchSemaphore(value: 0)
+        semaphore.wait()
     }
 
     private static func requiredString(_ environment: [String: String], key: String) throws -> String {
@@ -78,6 +94,79 @@ struct PistonRunnerMain {
             throw RunnerError.invalidEnv(key)
         }
         return parsed
+    }
+
+    private static func requiredDiscoveryURL(_ environment: [String: String]) throws -> URL {
+        if let endpoint = environment["VALVE_DISCOVERY_ENDPOINT"],
+           !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard let parsed = URL(string: endpoint), parsed.scheme != nil else {
+                throw RunnerError.invalidEnv("VALVE_DISCOVERY_ENDPOINT")
+            }
+            return parsed
+        }
+        return try requiredURL(environment, key: "VALVE_DISCOVERY_URL")
+    }
+
+    private static func resolveDiscoveryURL(
+        _ environment: [String: String],
+        manualUploadTarget: URL?,
+        insecureHTTPMode: Bool
+    ) throws -> URL {
+        if insecureHTTPMode, let manualUploadTarget {
+            // Resolver short-circuits to MANIFOLD_UPLOAD_URL before using discovery URL.
+            return manualUploadTarget
+        }
+        return try requiredDiscoveryURL(environment)
+    }
+
+    private static func resolveInstallID(_ environment: [String: String], insecureHTTPMode: Bool) throws -> String {
+        if insecureHTTPMode {
+            return nonEmpty(environment["PISTON_INSTALL_ID"]) ?? "dev-http-install"
+        }
+        return try requiredString(environment, key: "PISTON_INSTALL_ID")
+    }
+
+    private static func resolveCredential(_ environment: [String: String], insecureHTTPMode: Bool) throws -> String {
+        if insecureHTTPMode {
+            return nonEmpty(environment["PISTON_INSTALL_CREDENTIAL"]) ?? "dev-http-credential"
+        }
+        return try requiredString(environment, key: "PISTON_INSTALL_CREDENTIAL")
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value else {
+            return nil
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func parseURL(_ raw: String?) -> URL? {
+        guard let raw = nonEmpty(raw) else {
+            return nil
+        }
+        return URL(string: raw)
+    }
+
+    private static func configureFountainRuntime(environment: [String: String], installID: String) {
+        guard let dbPath = nonEmpty(environment["PISTON_FOUNTAIN_DB_PATH"]) else {
+            print("Piston startup: fountain runtime not configured (PISTON_FOUNTAIN_DB_PATH unset)")
+            return
+        }
+
+        let configured = dbPath.withCString { dbPathCString in
+            fountainConfigureC(dbPathCString)
+        }
+
+        if !configured {
+            print("Piston startup: fountain configure failed db=\(dbPath)")
+            return
+        }
+
+        installID.withCString { installIDCString in
+            fountainSetInstallIDC(installIDCString)
+        }
+        print("Piston startup: fountain configured db=\(dbPath) install_id=\(installID)")
     }
 
     private static func parseBool(_ rawValue: String?, fallback: Bool) -> Bool {

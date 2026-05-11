@@ -38,6 +38,12 @@ private func fountainMarkUploadBatchFailedC(
 @_silgen_name("FountainFreeUploadBatch")
 private func fountainFreeUploadBatchC(_ batch: UnsafeMutablePointer<FountainUploadBatch>)
 
+@_silgen_name("FountainConfigure")
+public func fountainConfigureC(_ databasePath: UnsafePointer<CChar>) -> Bool
+
+@_silgen_name("FountainSetInstallID")
+public func fountainSetInstallIDC(_ installID: UnsafePointer<CChar>)
+
 // #R010: Model finalize outcomes for success/failure paths.
 enum FountainBatchResult {
     case succeeded

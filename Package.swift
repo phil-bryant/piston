@@ -23,7 +23,15 @@ let package = Package(
         ),
         .target(
             name: "Piston",
-            dependencies: ["FountainShim"]
+            dependencies: ["FountainShim"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-force_load",
+                    "-Xlinker", "/Users/phil/local/src/fountain/build/libfountain.a"
+                ]),
+                .linkedLibrary("sqlite3"),
+                .linkedLibrary("c++")
+            ]
         ),
         .executableTarget(
             name: "PistonRunner",

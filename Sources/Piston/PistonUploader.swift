@@ -6,10 +6,14 @@ protocol PistonHTTPSession: Sendable {
 }
 
 extension URLSession: PistonHTTPSession {}
+typealias PistonStatusLogger = @Sendable (String) -> Void
 
 // #R005: Expose uploader controls around one actor-owned loop.
 public final class PistonUploader: @unchecked Sendable {
     private let loop: PistonUploadLoop
+    private static let defaultStatusLogger: PistonStatusLogger = { message in
+        print(message)
+    }
 
     public init(
         endpointURL: URL,
@@ -29,7 +33,8 @@ public final class PistonUploader: @unchecked Sendable {
             configuration: configuration,
             consentProvider: consentProvider,
             session: session,
-            fountainBridge: CFountainUploadBatchBridge()
+            fountainBridge: CFountainUploadBatchBridge(),
+            statusLogger: Self.defaultStatusLogger
         )
     }
 
@@ -38,7 +43,8 @@ public final class PistonUploader: @unchecked Sendable {
         configuration: PistonConfiguration,
         consentProvider: DiagnosticsConsentProvider,
         session: PistonHTTPSession,
-        fountainBridge: FountainUploadBatchBridging
+        fountainBridge: FountainUploadBatchBridging,
+        statusLogger: @escaping PistonStatusLogger = { _ in }
     ) {
         // #R015: Allow dependency injection for tests.
         self.loop = PistonUploadLoop(
@@ -46,7 +52,8 @@ public final class PistonUploader: @unchecked Sendable {
             configuration: configuration,
             consentProvider: consentProvider,
             session: session,
-            fountainBridge: fountainBridge
+            fountainBridge: fountainBridge,
+            statusLogger: statusLogger
         )
     }
 
@@ -74,6 +81,7 @@ actor PistonUploadLoop {
     private let consentProvider: DiagnosticsConsentProvider
     private let session: PistonHTTPSession
     private let fountainBridge: FountainUploadBatchBridging
+    private let statusLogger: PistonStatusLogger
     private let timerIntervalNanoseconds: UInt64
 
     private var periodicTask: Task<Void, Never>?
@@ -85,13 +93,15 @@ actor PistonUploadLoop {
         configuration: PistonConfiguration,
         consentProvider: DiagnosticsConsentProvider,
         session: PistonHTTPSession,
-        fountainBridge: FountainUploadBatchBridging
+        fountainBridge: FountainUploadBatchBridging,
+        statusLogger: @escaping PistonStatusLogger
     ) {
         self.endpointURL = endpointURL
         self.configuration = configuration
         self.consentProvider = consentProvider
         self.session = session
         self.fountainBridge = fountainBridge
+        self.statusLogger = statusLogger
         let interval = max(configuration.minimumUploadIntervalSeconds, 1.0)
         self.timerIntervalNanoseconds = UInt64(interval * 1_000_000_000)
     }
@@ -102,6 +112,9 @@ actor PistonUploadLoop {
             return
         }
 
+        logStatus(
+            "periodic loop starting endpoint=\(endpointURL.absoluteString) interval_seconds=\(configuration.minimumUploadIntervalSeconds)"
+        )
         periodicTask = Task { [timerIntervalNanoseconds] in
             while !Task.isCancelled {
                 do {
@@ -109,8 +122,11 @@ actor PistonUploadLoop {
                 } catch {
                     break
                 }
+                logStatus("poll tick begin")
                 await self.flushNow(maxBatches: 1)
+                logStatus("poll tick end")
             }
+            self.logStatus("periodic loop stopped")
         }
     }
 
@@ -122,11 +138,13 @@ actor PistonUploadLoop {
 
     func flushNow(maxBatches: Int) async {
         guard maxBatches > 0 else {
+            logStatus("flush skipped reason=invalid_max_batches value=\(maxBatches)")
             return
         }
 
         // #R035: Keep flush single-flight by queueing waiters.
         if isFlushing {
+            logStatus("flush joined reason=already_flushing")
             await withCheckedContinuation { continuation in
                 flushWaiters.append(continuation)
             }
@@ -143,18 +161,22 @@ actor PistonUploadLoop {
 
         // #R040: Cap flush drain count to at most five batches.
         let cappedBatches = min(maxBatches, 5)
+        logStatus("flush start requested_max=\(maxBatches) capped_max=\(cappedBatches)")
         for _ in 0..<cappedBatches {
-            let uploadedOne = await uploadOneBatch()
-            if !uploadedOne {
+            let outcome = await uploadOneBatch()
+            if !outcome.shouldContinueFlush {
+                logStatus("flush end reason=\(outcome.flushStopReason)")
                 return
             }
         }
+        logStatus("flush end reason=max_batches_reached")
     }
 
-    private func uploadOneBatch() async -> Bool {
+    private func uploadOneBatch() async -> UploadAttemptOutcome {
         // #R045: Gate claims by consent before requesting work.
         guard consentProvider.diagnosticsUploadEnabled else {
-            return false
+            logStatus("poll result consent=disabled action=skip")
+            return .consentDisabled
         }
 
         // #R050: Stop on nil claimed batch without treating as error.
@@ -162,13 +184,19 @@ actor PistonUploadLoop {
             maxEvents: configuration.maxEventsPerBatch,
             maxBytes: configuration.maxBatchBytes
         ) else {
-            return false
+            logStatus(
+                "poll result consent=enabled action=no_batch max_events=\(configuration.maxEventsPerBatch) max_bytes=\(configuration.maxBatchBytes)"
+            )
+            return .noBatch
         }
+
+        logStatus("poll result action=batch_claimed batch_id=\(batch.batchID) payload_bytes=\(batch.payload?.count ?? -1)")
 
         // #R055: Fail nil payload safely with status-zero marker.
         guard let body = batch.payload else {
             batch.finalize(.failed(httpStatus: 0, errorMessage: "Invalid payload"))
-            return false
+            logStatus("poll result action=batch_failed batch_id=\(batch.batchID) reason=invalid_payload")
+            return .invalidPayload
         }
 
         do {
@@ -176,16 +204,19 @@ actor PistonUploadLoop {
             // #R070: Mark 2xx as success and continue draining.
             if (200..<300).contains(statusCode) {
                 batch.finalize(.succeeded)
-                return true
+                logStatus("poll result action=batch_succeeded batch_id=\(batch.batchID) http_status=\(statusCode)")
+                return .uploadedBatch
             }
 
             // #R075: Mark non-2xx as failure and stop flush loop.
             batch.finalize(.failed(httpStatus: statusCode, errorMessage: "HTTP \(statusCode)"))
-            return false
+            logStatus("poll result action=batch_failed batch_id=\(batch.batchID) http_status=\(statusCode)")
+            return .httpFailure(statusCode)
         } catch {
             // #R080: Mark transport errors with status zero.
             batch.finalize(.failed(httpStatus: 0, errorMessage: String(describing: error)))
-            return false
+            logStatus("poll result action=batch_failed batch_id=\(batch.batchID) reason=transport_error error=\(error)")
+            return .transportFailure
         }
     }
 
@@ -205,5 +236,43 @@ actor PistonUploadLoop {
             throw URLError(.badServerResponse)
         }
         return httpResponse.statusCode
+    }
+
+    private func logStatus(_ message: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        statusLogger("Piston poll [\(timestamp)]: \(message)")
+    }
+
+    private enum UploadAttemptOutcome {
+        case uploadedBatch
+        case consentDisabled
+        case noBatch
+        case invalidPayload
+        case httpFailure(Int)
+        case transportFailure
+
+        var shouldContinueFlush: Bool {
+            if case .uploadedBatch = self {
+                return true
+            }
+            return false
+        }
+
+        var flushStopReason: String {
+            switch self {
+            case .uploadedBatch:
+                return "max_batches_reached"
+            case .consentDisabled:
+                return "consent_disabled"
+            case .noBatch:
+                return "no_batch"
+            case .invalidPayload:
+                return "invalid_payload"
+            case let .httpFailure(statusCode):
+                return "batch_failed_http_\(statusCode)"
+            case .transportFailure:
+                return "transport_error"
+            }
+        }
     }
 }

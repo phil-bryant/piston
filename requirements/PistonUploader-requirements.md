@@ -106,6 +106,13 @@ Tests:
 - Make mock session throw network error and verify failure status is zero.
 - Verify failure error message includes thrown error description.
 
+R085  Statement: Log explicit flush-stop outcomes.
+Design: `flushNow(maxBatches:)` logs `flush end reason=<value>` with explicit stop causes (`no_batch`, `consent_disabled`, `invalid_payload`, `batch_failed_http_<status>`, `transport_error`) instead of ambiguous aggregate wording.
+Tests:
+- Run with no queued batches and verify logs include `flush end reason=no_batch`.
+- Verify logs no longer include the ambiguous `no_more_work_or_error` flush end reason.
+
 ## Changelog
 
+- 2026-05-11: Added explicit flush-stop reason logging and tests to remove ambiguous poll-end status output.
 - 2026-05-07: Initial reverse-engineered requirements for `Sources/Piston/PistonUploader.swift`.

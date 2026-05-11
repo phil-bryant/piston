@@ -8,9 +8,16 @@
 
 Required environment:
 
-- `VALVE_DISCOVERY_URL`
-- `PISTON_INSTALL_ID`
+- `VALVE_DISCOVERY_ENDPOINT` (preferred; `VALVE_DISCOVERY_URL` also accepted). If unset, `05_run_piston.sh` attempts to read it from `1psa` item `VALVE_DISCOVERY_ENDPOINT` (`protocol`, `host`, `port`, `path` fields).
 - `PISTON_INSTALL_CREDENTIAL`
+
+Required argument:
+
+- `--install-id <id>`
+
+Optional argument:
+
+- `--install-credential <credential>` (if omitted, `PISTON_INSTALL_CREDENTIAL` env var is used; if still unset, `05_run_piston.sh` tries 1psa item `PISTON_INSTALL_CREDENTIAL` field `password`, then item named after `--install-id` field `password`)
 
 Optional behavior controls:
 
@@ -18,15 +25,14 @@ Optional behavior controls:
 - `PISTON_DISCOVERY_TIMEOUT_SECONDS` (default: `8`)
 - `PISTON_STALE_CACHE_GRACE_SECONDS` (default: `300`)
 - `PISTON_ALLOWED_UPLOAD_HOSTS` (comma-separated allowlist)
-- `MANIFOLD_UPLOAD_URL` (dev/local explicit override)
+- `MANIFOLD_UPLOAD_URL` (explicit override; `http://` runs in relaxed dev mode, `https://` stays in lockdown mode)
+- `PISTON_DEV_MANIFOLD_UPLOAD_URL` (optional relaxed-mode default when discovery endpoint itself is `http://`; default: `http://localhost:8081/v1/events/batch`)
 
 Example:
 
 ```bash
-VALVE_DISCOVERY_URL="https://valve.example.com/v1/piston/upload-target" \
-PISTON_INSTALL_ID="install-123" \
-PISTON_INSTALL_CREDENTIAL="provisioned-credential" \
-./05_run_piston.sh
+VALVE_DISCOVERY_ENDPOINT="https://valve.example.com/v1/piston/upload-target" \
+./05_run_piston.sh --install-id "install-123" --install-credential "provisioned-credential"
 ```
 
 Startup flow:

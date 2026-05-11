@@ -12,3 +12,4 @@ DerivedData/
 .DS_Store
 bin/*
 .cursor/rules/*
+.piston

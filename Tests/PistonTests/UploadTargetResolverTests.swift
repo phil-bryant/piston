@@ -64,6 +64,36 @@ final class UploadTargetResolverTests: XCTestCase {
         XCTAssertEqual(discovery.callCount, 0)
     }
 
+    func testEnvironmentOverrideAllowsLocalHTTPURL() async throws {
+        let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let cacheURL = tempRoot.appendingPathComponent("upload-target-cache.json")
+        let discovery = MockDiscoveryClient(
+            result: .success(
+                UploadTargetDiscoveryResponse(
+                    uploadURL: "https://manifold.example.com/v1/events/batch",
+                    ttlSeconds: 120,
+                    expiresAt: nil,
+                    routingVersion: nil
+                )
+            )
+        )
+        let resolver = UploadTargetResolver(
+            configuration: .init(
+                discoveryURL: URL(string: "https://valve.example.com/v1/piston/upload-target")!,
+                cacheFileURL: cacheURL
+            ),
+            discoveryClient: discovery,
+            envProvider: { ["MANIFOLD_UPLOAD_URL": "http://localhost:8081/v1/events/batch"] }
+        )
+
+        let resolution = try await resolver.resolve(installID: "install-1", credential: "cred-1")
+
+        XCTAssertEqual(resolution.source, .environmentOverride)
+        XCTAssertEqual(resolution.endpointURL.absoluteString, "http://localhost:8081/v1/events/batch")
+        XCTAssertEqual(discovery.callCount, 0)
+    }
+
     func testDiscoveryFailureFallsBackToFreshCache() async throws {
         let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

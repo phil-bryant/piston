@@ -138,7 +138,10 @@ public final class UploadTargetResolver: @unchecked Sendable {
     }
 
     private func validateUploadURL(rawURL: String) throws -> URL {
-        guard let url = URL(string: rawURL), let scheme = url.scheme?.lowercased(), scheme == "https", let host = url.host else {
+        guard let url = URL(string: rawURL),
+              let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased(),
+              scheme == "https" || (scheme == "http" && isLocalHost(host)) else {
             throw UploadTargetResolverError.invalidUploadURL(rawURL)
         }
 
@@ -146,6 +149,10 @@ public final class UploadTargetResolver: @unchecked Sendable {
             throw UploadTargetResolverError.invalidUploadURL(rawURL)
         }
         return url
+    }
+
+    private func isLocalHost(_ host: String) -> Bool {
+        host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
 
     private func writeCache(record: UploadTargetCacheRecord) throws {
