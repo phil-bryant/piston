@@ -10,6 +10,10 @@ let package = Package(
         .library(
             name: "Piston",
             targets: ["Piston"]
+        ),
+        .executable(
+            name: "PistonRunner",
+            targets: ["PistonRunner"]
         )
     ],
     targets: [
@@ -21,9 +25,13 @@ let package = Package(
             name: "Piston",
             dependencies: ["FountainShim"]
         ),
+        .executableTarget(
+            name: "PistonRunner",
+            dependencies: ["Piston"]
+        ),
         .testTarget(
             name: "PistonTests",
-            dependencies: ["Piston"]
+            dependencies: ["Piston", "PistonRunner"]
         )
     ]
 )

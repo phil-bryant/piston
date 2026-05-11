@@ -1,0 +1,130 @@
+import Foundation
+import Piston
+
+private struct RunnerConsentProvider: DiagnosticsConsentProvider {
+    var diagnosticsUploadEnabled: Bool
+}
+
+enum RunnerError: Error {
+    case missingEnv(String)
+    case invalidEnv(String)
+}
+
+@main
+struct PistonRunnerMain {
+    static func main() async {
+        do {
+            let environment = ProcessInfo.processInfo.environment
+            let discoveryURL = try requiredURL(environment, key: "VALVE_DISCOVERY_URL")
+            let installID = try requiredString(environment, key: "PISTON_INSTALL_ID")
+            let credential = try requiredString(environment, key: "PISTON_INSTALL_CREDENTIAL")
+            let cachePath = environment["PISTON_UPLOAD_TARGET_CACHE"] ?? ".piston/upload-target-cache.json"
+            let cacheURL = URL(fileURLWithPath: cachePath)
+
+            let allowedHosts = parseAllowedHosts(environment["PISTON_ALLOWED_UPLOAD_HOSTS"])
+            let discoveryTimeout = parseDouble(environment["PISTON_DISCOVERY_TIMEOUT_SECONDS"], fallback: 8)
+            let staleGrace = parseDouble(environment["PISTON_STALE_CACHE_GRACE_SECONDS"], fallback: 0)
+            let minUploadInterval = parseDouble(environment["PISTON_MIN_UPLOAD_INTERVAL_SECONDS"], fallback: 30)
+
+            let resolverConfig = UploadTargetResolverConfiguration(
+                discoveryURL: discoveryURL,
+                cacheFileURL: cacheURL,
+                allowedUploadHosts: allowedHosts,
+                discoveryTimeoutSeconds: discoveryTimeout,
+                staleCacheGracePeriodSeconds: staleGrace
+            )
+            let resolver = UploadTargetResolver(configuration: resolverConfig)
+            let resolved = try await resolver.resolve(installID: installID, credential: credential)
+
+            let uploadEnabled = parseBool(environment["DIAGNOSTICS_UPLOAD_ENABLED"], fallback: true)
+            let consent = RunnerConsentProvider(diagnosticsUploadEnabled: uploadEnabled)
+            let uploader = PistonUploader(
+                endpointURL: resolved.endpointURL,
+                configuration: .init(
+                    maxEventsPerBatch: parseInt(environment["PISTON_MAX_EVENTS_PER_BATCH"], fallback: 200),
+                    maxBatchBytes: parseInt(environment["PISTON_MAX_BATCH_BYTES"], fallback: 512 * 1024),
+                    uploadTimeoutSeconds: parseDouble(environment["PISTON_UPLOAD_TIMEOUT_SECONDS"], fallback: 30),
+                    minimumUploadIntervalSeconds: minUploadInterval,
+                    allowsCellularOrExpensiveNetwork: parseBool(environment["PISTON_ALLOW_EXPENSIVE_NETWORK"], fallback: true),
+                    userAgent: environment["PISTON_USER_AGENT"] ?? "PistonRunner/1.0"
+                ),
+                consentProvider: consent
+            )
+
+            print("Piston startup: resolved upload target source=\(resolved.source.rawValue) url=\(redactURL(resolved.endpointURL))")
+            if !uploadEnabled {
+                print("Piston startup: diagnostics upload disabled by consent provider")
+            }
+
+            uploader.start()
+            print("Piston startup: uploader started")
+            dispatchMain()
+        } catch {
+            print("Piston startup failed: \(error)")
+            exit(1)
+        }
+    }
+
+    private static func requiredString(_ environment: [String: String], key: String) throws -> String {
+        guard let value = environment[key], !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw RunnerError.missingEnv(key)
+        }
+        return value
+    }
+
+    private static func requiredURL(_ environment: [String: String], key: String) throws -> URL {
+        let raw = try requiredString(environment, key: key)
+        guard let parsed = URL(string: raw), parsed.scheme != nil else {
+            throw RunnerError.invalidEnv(key)
+        }
+        return parsed
+    }
+
+    private static func parseBool(_ rawValue: String?, fallback: Bool) -> Bool {
+        guard let lowered = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
+            return fallback
+        }
+        if lowered == "true" || lowered == "1" || lowered == "yes" {
+            return true
+        }
+        if lowered == "false" || lowered == "0" || lowered == "no" {
+            return false
+        }
+        return fallback
+    }
+
+    private static func parseInt(_ rawValue: String?, fallback: Int) -> Int {
+        guard let rawValue, let parsed = Int(rawValue), parsed > 0 else {
+            return fallback
+        }
+        return parsed
+    }
+
+    private static func parseDouble(_ rawValue: String?, fallback: Double) -> Double {
+        guard let rawValue, let parsed = Double(rawValue), parsed > 0 else {
+            return fallback
+        }
+        return parsed
+    }
+
+    private static func parseAllowedHosts(_ rawHosts: String?) -> Set<String> {
+        guard let rawHosts else {
+            return []
+        }
+        return Set(
+            rawHosts
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    private static func redactURL(_ url: URL) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url.absoluteString
+        }
+        components.query = nil
+        components.fragment = nil
+        return components.string ?? url.absoluteString
+    }
+}

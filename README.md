@@ -2,6 +2,73 @@
 
 `Piston` periodically claims pre-built JSON event batches from Fountain and uploads them to an HTTPS ingest endpoint with `URLSession`.
 
+## Discovery-driven startup (Option 2)
+
+`05_run_piston.sh` starts `PistonRunner`, which resolves the Manifold upload target from Valve at startup and falls back to a cached target when discovery is temporarily unavailable.
+
+Required environment:
+
+- `VALVE_DISCOVERY_URL`
+- `PISTON_INSTALL_ID`
+- `PISTON_INSTALL_CREDENTIAL`
+
+Optional behavior controls:
+
+- `PISTON_UPLOAD_TARGET_CACHE` (default: `./.piston/upload-target-cache.json`)
+- `PISTON_DISCOVERY_TIMEOUT_SECONDS` (default: `8`)
+- `PISTON_STALE_CACHE_GRACE_SECONDS` (default: `300`)
+- `PISTON_ALLOWED_UPLOAD_HOSTS` (comma-separated allowlist)
+- `MANIFOLD_UPLOAD_URL` (dev/local explicit override)
+
+Example:
+
+```bash
+VALVE_DISCOVERY_URL="https://valve.example.com/v1/piston/upload-target" \
+PISTON_INSTALL_ID="install-123" \
+PISTON_INSTALL_CREDENTIAL="provisioned-credential" \
+./05_run_piston.sh
+```
+
+Startup flow:
+
+```text
+┌────────────────┐
+│ runPistonStart │
+└───────┬────────┘
+        │
+        ▼
+┌────────────────────────────┐
+│ ReadInstallIdAndCredential │
+└─────────────┬──────────────┘
+              │
+              ▼
+┌────────────────────────────┐
+│ CallValveDiscoveryEndpoint │
+└─────────────┬──────────────┘
+              │
+      ┌───────┴─────────────────────────────┐
+      │                                     │
+      │ 200 valid                           │ error / timeout
+      ▼                                     ▼
+┌───────────────────┐               ┌──────────────────┐
+│ ValidateUploadUrl │               │ ReadCachedTarget │
+└─────────┬─────────┘               └────────┬─────────┘
+          │                                  │
+          ▼                                  ▼
+┌─────────────────────┐              ┌───────────────┐
+│ PersistCacheWithTTL │              │ CacheUsable ? │
+└──────────┬──────────┘              └───────┬───────┘
+           │                                 │
+           │                         ┌───────┴─────────────┐
+           │                         │                     │
+           │                         │ yes                 │ no
+           │                         ▼                     ▼
+           │              ┌───────────────────┐   ┌─────────────────────────┐
+           └─────────────▶│ ConstructAndStart │   │ ExitWithActionableError │
+                          │ PistonUploader    │   └─────────────────────────┘
+                          └───────────────────┘
+```
+
 ## App startup integration example
 
 ```swift
