@@ -39,3 +39,62 @@ struct MyMacOSApp {
     }
 }
 ```
+
+## Architecture Diagram
+
+```text
+BACKEND
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│  ┌────────────────────────────┐        ┌──────────────────────────────────┐  │
+│  │           Valve            │        │             Manifold             │  │
+│  │                            │        │                                  │  │
+│  │ - runs after user sign-in  │        │ - verifies signature / credential│  │
+│  │ - verifies Account A access│        │ - derives tenant_id + install_id │  │
+│  │ - provisions per-tenant /  │        │   from credential                │  │
+│  │   per-install credential   │        │ - stores tenant-scoped events    │  │
+│  │ - rotates / revokes creds  │        │ - rejects tenant mismatches      │  │
+│  └─────────────┬──────────────┘        │                                  │  │
+│                │                       │  ┌───────────────────────┐       │  │
+│                │                       │  │ Ingest Endpoint       │       │  │
+│                │                 ┌─────┼─►│ POST /v1/events/batch │       │  │
+│                │                 │     │  └───────────────────────┘       │  │
+│                │                 │     │                                  │  │
+│                │                 │     └──────────────────────┬───────────┘  │
+│                │                 │                            │              │
+└────────────────┼─────────────────┼────────────────────────────┼──────────────┘
+                 │                 │                            │
+                 │                 │                            │ tenant-scoped
+                 │                 │                            │ events
+                 │ credential      │             NOC/SOC        ▼
+                 │ for Account A   │             ┌──────────────────────────┐
+                 │ + Install 123   │             │          Vortex          │
+                 │                 │             │                          │
+                 │                 │             │ - downstream all-in-one  │
+                 │                 │             │ - storage / analytics    │
+                 │                 │             │ - dashboards / alerts    │
+                 │                 │             │ - incident review        │
+    credential   │                 │             │ - strict tenant_id reads │
+    provisioned  │                 │             └──────────────────────────┘
+   after sign-in │                 │
+                 │                 │ HTTPS + signed batch
+                 │                 │ credential proves Account A + Install 123
+CUSTOMER DEVICE  ▼                 │
+┌──────────────────────────────────┼─────────┐
+│                                  │         │
+│  ┌────────────────────┐   ┌─────────────┐  │
+│  │      Fountain      │   │   Piston    │  │
+│  │                    │   │             │  │
+│  │ - C++ event logger │   │ - Swift     │  │
+│  │ - SQLite queue     │   │   uploader  │  │
+│  │ - tags events with │   │ - stores    │  │
+│  │   tenant_scope     │   │   credential│  │
+│  └─────────┬──────────┘   │ - claims    │  │
+│            │              │   matching  │  │
+│            │ Account A    │   scope     │  │
+│            │ events       │ - signs     │  │
+│            └─────────────►│   uploads   │  │
+│                           └─────────────┘  │
+│                                            │
+└────────────────────────────────────────────┘
+```
