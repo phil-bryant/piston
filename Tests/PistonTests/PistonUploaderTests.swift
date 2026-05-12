@@ -162,6 +162,24 @@ final class PistonUploaderTests: XCTestCase {
         XCTAssertFalse(logs.contains("flush end reason=no_more_work_or_error"))
     }
 
+    func testConfiguredManifoldIngestKeyAddsHeader() async {
+        let consent = MutableConsentProvider(enabled: true)
+        let bridge = MockFountainBridge(
+            queued: [.init(id: "batch-1", payload: Data(#"{"ok":true}"#.utf8))]
+        )
+        let session = MockHTTPSession(result: .success(HTTPURLResponse(statusCode: 204)))
+        let uploader = makeUploader(
+            consent: consent,
+            bridge: bridge,
+            session: session,
+            manifoldIngestKey: "local-ingest-key"
+        )
+
+        await uploader.flushNow()
+
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "X-Manifold-Ingest-Key"), "local-ingest-key")
+    }
+
     private func assertHTTPFailureStatus(_ status: Int) async {
         let consent = MutableConsentProvider(enabled: true)
         let bridge = MockFountainBridge(
@@ -182,6 +200,7 @@ final class PistonUploaderTests: XCTestCase {
         consent: MutableConsentProvider,
         bridge: MockFountainBridge,
         session: PistonHTTPSession,
+        manifoldIngestKey: String? = nil,
         statusLogger: @escaping PistonStatusLogger = { _ in }
     ) -> PistonUploader {
         PistonUploader(
@@ -194,6 +213,7 @@ final class PistonUploaderTests: XCTestCase {
                 allowsCellularOrExpensiveNetwork: true,
                 userAgent: "PistonTests/1.0"
             ),
+            manifoldIngestKey: manifoldIngestKey,
             consentProvider: consent,
             session: session,
             fountainBridge: bridge,

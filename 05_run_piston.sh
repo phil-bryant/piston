@@ -241,7 +241,7 @@ resolve_fountain_db_path_from_local_heartbeat_state() {
 validate_inputs() {
   if is_insecure_http_mode; then
     if [[ -z "${MANIFOLD_UPLOAD_URL:-}" ]]; then
-      export MANIFOLD_UPLOAD_URL="${PISTON_DEV_MANIFOLD_UPLOAD_URL:-http://localhost:8081/v1/events/batch}"
+      export MANIFOLD_UPLOAD_URL="${PISTON_DEV_MANIFOLD_UPLOAD_URL:-http://localhost:8080/v1/events/batch}"
     fi
     export PISTON_INSTALL_ID="${PISTON_INSTALL_ID:-dev-http-install}"
     export PISTON_INSTALL_CREDENTIAL="${PISTON_INSTALL_CREDENTIAL:-dev-http-credential}"

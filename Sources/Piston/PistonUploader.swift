@@ -18,6 +18,7 @@ public final class PistonUploader: @unchecked Sendable {
     public init(
         endpointURL: URL,
         configuration: PistonConfiguration,
+        manifoldIngestKey: String? = nil,
         consentProvider: DiagnosticsConsentProvider
     ) {
         // #R010: Configure URLSession from explicit uploader config.
@@ -31,6 +32,7 @@ public final class PistonUploader: @unchecked Sendable {
         self.loop = PistonUploadLoop(
             endpointURL: endpointURL,
             configuration: configuration,
+            manifoldIngestKey: manifoldIngestKey,
             consentProvider: consentProvider,
             session: session,
             fountainBridge: CFountainUploadBatchBridge(),
@@ -41,6 +43,7 @@ public final class PistonUploader: @unchecked Sendable {
     init(
         endpointURL: URL,
         configuration: PistonConfiguration,
+        manifoldIngestKey: String? = nil,
         consentProvider: DiagnosticsConsentProvider,
         session: PistonHTTPSession,
         fountainBridge: FountainUploadBatchBridging,
@@ -50,6 +53,7 @@ public final class PistonUploader: @unchecked Sendable {
         self.loop = PistonUploadLoop(
             endpointURL: endpointURL,
             configuration: configuration,
+            manifoldIngestKey: manifoldIngestKey,
             consentProvider: consentProvider,
             session: session,
             fountainBridge: fountainBridge,
@@ -78,6 +82,7 @@ public final class PistonUploader: @unchecked Sendable {
 actor PistonUploadLoop {
     private let endpointURL: URL
     private let configuration: PistonConfiguration
+    private let manifoldIngestKey: String?
     private let consentProvider: DiagnosticsConsentProvider
     private let session: PistonHTTPSession
     private let fountainBridge: FountainUploadBatchBridging
@@ -91,6 +96,7 @@ actor PistonUploadLoop {
     init(
         endpointURL: URL,
         configuration: PistonConfiguration,
+        manifoldIngestKey: String?,
         consentProvider: DiagnosticsConsentProvider,
         session: PistonHTTPSession,
         fountainBridge: FountainUploadBatchBridging,
@@ -98,6 +104,7 @@ actor PistonUploadLoop {
     ) {
         self.endpointURL = endpointURL
         self.configuration = configuration
+        self.manifoldIngestKey = manifoldIngestKey
         self.consentProvider = consentProvider
         self.session = session
         self.fountainBridge = fountainBridge
@@ -229,6 +236,9 @@ actor PistonUploadLoop {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(configuration.userAgent, forHTTPHeaderField: "User-Agent")
+        if let manifoldIngestKey, !manifoldIngestKey.isEmpty {
+            request.setValue(manifoldIngestKey, forHTTPHeaderField: "X-Manifold-Ingest-Key")
+        }
 
         let (_, response) = try await session.data(for: request)
         // #R065: Require HTTPURLResponse and return its status code.

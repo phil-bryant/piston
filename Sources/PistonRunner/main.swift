@@ -49,6 +49,7 @@ struct PistonRunnerMain {
 
             let uploadEnabled = parseBool(environment["DIAGNOSTICS_UPLOAD_ENABLED"], fallback: true)
             let consent = RunnerConsentProvider(diagnosticsUploadEnabled: uploadEnabled)
+            let manifoldIngestKey = nonEmpty(environment["MANIFOLD_INGEST_KEY"])
             let uploader = PistonUploader(
                 endpointURL: resolved.endpointURL,
                 configuration: .init(
@@ -59,12 +60,16 @@ struct PistonRunnerMain {
                     allowsCellularOrExpensiveNetwork: parseBool(environment["PISTON_ALLOW_EXPENSIVE_NETWORK"], fallback: true),
                     userAgent: environment["PISTON_USER_AGENT"] ?? "PistonRunner/1.0"
                 ),
+                manifoldIngestKey: manifoldIngestKey,
                 consentProvider: consent
             )
 
             print("Piston startup: resolved upload target source=\(resolved.source.rawValue) url=\(redactURL(resolved.endpointURL))")
             if !uploadEnabled {
                 print("Piston startup: diagnostics upload disabled by consent provider")
+            }
+            if manifoldIngestKey == nil {
+                print("Piston startup: manifold ingest key not configured (MANIFOLD_INGEST_KEY unset)")
             }
 
             uploader.start()

@@ -116,7 +116,7 @@ EOF
 @test "R010: allows no install identity when MANIFOLD_UPLOAD_URL uses http" {
   make_swift_stub_success
   run env PATH="${STUB_BIN}:/usr/bin:/bin" \
-    MANIFOLD_UPLOAD_URL="http://localhost:8081/v1/events/batch" \
+    MANIFOLD_UPLOAD_URL="http://localhost:8080/v1/events/batch" \
     bash "${FIXTURE_ROOT}/05_run_piston.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"target_source_hint=env"* ]]
@@ -151,7 +151,7 @@ from pathlib import Path
 import sys
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
 assert "swift run PistonRunner" in text
-assert "MANIFOLD_UPLOAD_URL=http://localhost:8081/v1/events/batch" in text
+assert "MANIFOLD_UPLOAD_URL=http://localhost:8080/v1/events/batch" in text
 PY
   [ "$status" -eq 0 ]
 }
@@ -168,7 +168,7 @@ from pathlib import Path
 import sys
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
 assert "swift run PistonRunner" in text
-assert "MANIFOLD_UPLOAD_URL=http://localhost:8081/v1/events/batch" in text
+assert "MANIFOLD_UPLOAD_URL=http://localhost:8080/v1/events/batch" in text
 PY
   [ "$status" -eq 0 ]
 }
@@ -275,7 +275,7 @@ PY
 @test "R025: prints detached runner pid for long-running process" {
   make_swift_stub_long_running_success
   run env PATH="${STUB_BIN}:/usr/bin:/bin" \
-    MANIFOLD_UPLOAD_URL="http://localhost:8081/v1/events/batch" \
+    MANIFOLD_UPLOAD_URL="http://localhost:8080/v1/events/batch" \
     bash "${FIXTURE_ROOT}/05_run_piston.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"runner_detached_pid="* ]]

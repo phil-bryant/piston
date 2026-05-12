@@ -77,10 +77,11 @@ Tests:
 - Verify uploader does not attempt HTTP request for nil payload batches.
 
 R060  Statement: Post JSON payload bytes.
-Design: `post(body:)` builds `URLRequest` for endpoint, sets `POST`, assigns body bytes directly, applies timeout, and sets `Content-Type`, `Accept`, and `User-Agent`.
+Design: `post(body:)` builds `URLRequest` for endpoint, sets `POST`, assigns body bytes directly, applies timeout, and sets `Content-Type`, `Accept`, and `User-Agent`; when configured, include `X-Manifold-Ingest-Key`.
 Tests:
 - Capture request in mock session and verify method, headers, timeout, and body bytes.
 - Verify `User-Agent` header equals configured value.
+- Configure ingest key and verify `X-Manifold-Ingest-Key` header is present on outgoing requests.
 
 R065  Statement: Require HTTP responses.
 Design: `post(body:)` awaits session data call, casts response to `HTTPURLResponse`, returns status code, and throws `URLError(.badServerResponse)` when cast fails.

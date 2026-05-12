@@ -26,7 +26,8 @@ Optional behavior controls:
 - `PISTON_STALE_CACHE_GRACE_SECONDS` (default: `300`)
 - `PISTON_ALLOWED_UPLOAD_HOSTS` (comma-separated allowlist)
 - `MANIFOLD_UPLOAD_URL` (explicit override; `http://` runs in relaxed dev mode, `https://` stays in lockdown mode)
-- `PISTON_DEV_MANIFOLD_UPLOAD_URL` (optional relaxed-mode default when discovery endpoint itself is `http://`; default: `http://localhost:8081/v1/events/batch`)
+- `PISTON_DEV_MANIFOLD_UPLOAD_URL` (optional relaxed-mode default when discovery endpoint itself is `http://`; default: `http://localhost:8080/v1/events/batch`)
+- `MANIFOLD_INGEST_KEY` (optional shared key sent as `X-Manifold-Ingest-Key`; required when Manifold auth is enabled)
 
 Example:
 
