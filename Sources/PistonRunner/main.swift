@@ -17,68 +17,81 @@ struct PistonRunnerMain {
         do {
             setbuf(stdout, nil)
             setbuf(stderr, nil)
-            let environment = ProcessInfo.processInfo.environment
-            let manualUploadTarget = parseURL(environment["MANIFOLD_UPLOAD_URL"])
-            let insecureHTTPMode = manualUploadTarget?.scheme?.lowercased() == "http"
-
-            let discoveryURL = try resolveDiscoveryURL(
-                environment,
-                manualUploadTarget: manualUploadTarget,
-                insecureHTTPMode: insecureHTTPMode
-            )
-            let installID = try resolveInstallID(environment, insecureHTTPMode: insecureHTTPMode)
-            let credential = try resolveCredential(environment, insecureHTTPMode: insecureHTTPMode)
-            configureFountainRuntime(environment: environment, installID: installID)
-            let cachePath = environment["PISTON_UPLOAD_TARGET_CACHE"] ?? ".piston/upload-target-cache.json"
-            let cacheURL = URL(fileURLWithPath: cachePath)
-
-            let allowedHosts = parseAllowedHosts(environment["PISTON_ALLOWED_UPLOAD_HOSTS"])
-            let discoveryTimeout = parseDouble(environment["PISTON_DISCOVERY_TIMEOUT_SECONDS"], fallback: 8)
-            let staleGrace = parseDouble(environment["PISTON_STALE_CACHE_GRACE_SECONDS"], fallback: 0)
-            let minUploadInterval = parseDouble(environment["PISTON_MIN_UPLOAD_INTERVAL_SECONDS"], fallback: 30)
-
-            let resolverConfig = UploadTargetResolverConfiguration(
-                discoveryURL: discoveryURL,
-                cacheFileURL: cacheURL,
-                allowedUploadHosts: allowedHosts,
-                discoveryTimeoutSeconds: discoveryTimeout,
-                staleCacheGracePeriodSeconds: staleGrace
-            )
-            let resolver = UploadTargetResolver(configuration: resolverConfig)
-            let resolved = try await resolver.resolve(installID: installID, credential: credential)
-
-            let uploadEnabled = parseBool(environment["DIAGNOSTICS_UPLOAD_ENABLED"], fallback: true)
-            let consent = RunnerConsentProvider(diagnosticsUploadEnabled: uploadEnabled)
-            let manifoldIngestKey = nonEmpty(environment["MANIFOLD_INGEST_KEY"])
-            let uploader = PistonUploader(
-                endpointURL: resolved.endpointURL,
-                configuration: .init(
-                    maxEventsPerBatch: parseInt(environment["PISTON_MAX_EVENTS_PER_BATCH"], fallback: 200),
-                    maxBatchBytes: parseInt(environment["PISTON_MAX_BATCH_BYTES"], fallback: 512 * 1024),
-                    uploadTimeoutSeconds: parseDouble(environment["PISTON_UPLOAD_TIMEOUT_SECONDS"], fallback: 30),
-                    minimumUploadIntervalSeconds: minUploadInterval,
-                    allowsCellularOrExpensiveNetwork: parseBool(environment["PISTON_ALLOW_EXPENSIVE_NETWORK"], fallback: true),
-                    userAgent: environment["PISTON_USER_AGENT"] ?? "PistonRunner/1.0"
-                ),
-                manifoldIngestKey: manifoldIngestKey,
-                consentProvider: consent
-            )
-
-            print("Piston startup: resolved upload target source=\(resolved.source.rawValue) url=\(redactURL(resolved.endpointURL))")
-            if !uploadEnabled {
-                print("Piston startup: diagnostics upload disabled by consent provider")
-            }
-            if manifoldIngestKey == nil {
-                print("Piston startup: manifold ingest key not configured (MANIFOLD_INGEST_KEY unset)")
-            }
-
-            uploader.start()
-            print("Piston startup: uploader started")
-            parkForever()
+            try await startUploadService(environment: ProcessInfo.processInfo.environment)
         } catch {
             print("Piston startup failed: \(error)")
             exit(1)
         }
+    }
+
+    private static func startUploadService(environment: [String: String]) async throws {
+        let resolved = try await resolveUploadTargetEndpoint(environment: environment)
+
+        let uploadEnabled = parseBool(environment["DIAGNOSTICS_UPLOAD_ENABLED"], fallback: true)
+        let consent = RunnerConsentProvider(diagnosticsUploadEnabled: uploadEnabled)
+        let manifoldIngestKey = nonEmpty(environment["MANIFOLD_INGEST_KEY"])
+        let allowsExpensive = parseBool(environment["PISTON_ALLOW_EXPENSIVE_NETWORK"], fallback: true)
+        let minUploadInterval = parseDouble(environment["PISTON_MIN_UPLOAD_INTERVAL_SECONDS"], fallback: 30)
+        let uploader = PistonUploader(
+            endpointURL: resolved.endpointURL,
+            configuration: .init(
+                maxEventsPerBatch: parseInt(environment["PISTON_MAX_EVENTS_PER_BATCH"], fallback: 200),
+                maxBatchBytes: parseInt(environment["PISTON_MAX_BATCH_BYTES"], fallback: 512 * 1024),
+                uploadTimeoutSeconds: parseDouble(environment["PISTON_UPLOAD_TIMEOUT_SECONDS"], fallback: 30),
+                minimumUploadIntervalSeconds: minUploadInterval,
+                allowsCellularOrExpensiveNetwork: allowsExpensive,
+                userAgent: environment["PISTON_USER_AGENT"] ?? "PistonRunner/1.0"
+            ),
+            manifoldIngestKey: manifoldIngestKey,
+            consentProvider: consent
+        )
+
+        let redacted = redactURL(resolved.endpointURL)
+        print(
+            "Piston startup: resolved upload target source=\(resolved.source.rawValue) url=\(redacted)"
+        )
+        if !uploadEnabled {
+            print("Piston startup: diagnostics upload disabled by consent provider")
+        }
+        if manifoldIngestKey == nil {
+            print("Piston startup: manifold ingest key not configured (MANIFOLD_INGEST_KEY unset)")
+        }
+
+        uploader.start()
+        print("Piston startup: uploader started")
+        parkForever()
+    }
+
+    private static func resolveUploadTargetEndpoint(
+        environment: [String: String]
+    ) async throws -> UploadTargetResolution {
+        let manualUploadTarget = parseURL(environment["MANIFOLD_UPLOAD_URL"])
+        let insecureHTTPMode = manualUploadTarget?.scheme?.lowercased() == "http"
+
+        let discoveryURL = try resolveDiscoveryURL(
+            environment,
+            manualUploadTarget: manualUploadTarget,
+            insecureHTTPMode: insecureHTTPMode
+        )
+        let installID = try resolveInstallID(environment, insecureHTTPMode: insecureHTTPMode)
+        let credential = try resolveCredential(environment, insecureHTTPMode: insecureHTTPMode)
+        configureFountainRuntime(environment: environment, installID: installID)
+        let cachePath = environment["PISTON_UPLOAD_TARGET_CACHE"] ?? ".piston/upload-target-cache.json"
+        let cacheURL = URL(fileURLWithPath: cachePath)
+
+        let allowedHosts = parseAllowedHosts(environment["PISTON_ALLOWED_UPLOAD_HOSTS"])
+        let discoveryTimeout = parseDouble(environment["PISTON_DISCOVERY_TIMEOUT_SECONDS"], fallback: 8)
+        let staleGrace = parseDouble(environment["PISTON_STALE_CACHE_GRACE_SECONDS"], fallback: 0)
+
+        let resolverConfig = UploadTargetResolverConfiguration(
+            discoveryURL: discoveryURL,
+            cacheFileURL: cacheURL,
+            allowedUploadHosts: allowedHosts,
+            discoveryTimeoutSeconds: discoveryTimeout,
+            staleCacheGracePeriodSeconds: staleGrace
+        )
+        let resolver = UploadTargetResolver(configuration: resolverConfig)
+        return try await resolver.resolve(installID: installID, credential: credential)
     }
 
     private static func parkForever() {

@@ -94,8 +94,11 @@ public final class UploadTargetResolver: @unchecked Sendable {
 
     // #R025: Resolve endpoint from env override, discovery, then cache fallback.
     public func resolve(installID: String, credential: String) async throws -> UploadTargetResolution {
-        if let envOverride = envProvider()["MANIFOLD_UPLOAD_URL"], !envOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let endpointURL = try validateUploadURL(rawURL: envOverride)
+        let env = envProvider()
+        let rawOverride = env["MANIFOLD_UPLOAD_URL"]
+        let trimmedOverride = rawOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedOverride.isEmpty {
+            let endpointURL = try validateUploadURL(rawURL: trimmedOverride)
             return UploadTargetResolution(endpointURL: endpointURL, source: .environmentOverride)
         }
 

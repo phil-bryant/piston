@@ -119,9 +119,9 @@ actor PistonUploadLoop {
             return
         }
 
-        logStatus(
-            "periodic loop starting endpoint=\(endpointURL.absoluteString) interval_seconds=\(configuration.minimumUploadIntervalSeconds)"
-        )
+        let endpoint = endpointURL.absoluteString
+        let intervalSeconds = configuration.minimumUploadIntervalSeconds
+        logStatus("periodic loop starting endpoint=\(endpoint) interval_seconds=\(intervalSeconds)")
         periodicTask = Task { [timerIntervalNanoseconds] in
             while !Task.isCancelled {
                 do {
@@ -169,6 +169,7 @@ actor PistonUploadLoop {
         // #R040: Cap flush drain count to at most five batches.
         let cappedBatches = min(maxBatches, 5)
         logStatus("flush start requested_max=\(maxBatches) capped_max=\(cappedBatches)")
+        // #R085: Log explicit flush-stop outcomes (`flush end reason=<value>` from `flushStopReason`).
         for _ in 0..<cappedBatches {
             let outcome = await uploadOneBatch()
             if !outcome.shouldContinueFlush {
@@ -191,13 +192,16 @@ actor PistonUploadLoop {
             maxEvents: configuration.maxEventsPerBatch,
             maxBytes: configuration.maxBatchBytes
         ) else {
-            logStatus(
-                "poll result consent=enabled action=no_batch max_events=\(configuration.maxEventsPerBatch) max_bytes=\(configuration.maxBatchBytes)"
-            )
+            let maxEv = configuration.maxEventsPerBatch
+            let maxBy = configuration.maxBatchBytes
+            logStatus("poll result consent=enabled action=no_batch max_events=\(maxEv) max_bytes=\(maxBy)")
             return .noBatch
         }
 
-        logStatus("poll result action=batch_claimed batch_id=\(batch.batchID) payload_bytes=\(batch.payload?.count ?? -1)")
+        let payloadBytes = batch.payload?.count ?? -1
+        logStatus(
+            "poll result action=batch_claimed batch_id=\(batch.batchID) payload_bytes=\(payloadBytes)"
+        )
 
         // #R055: Fail nil payload safely with status-zero marker.
         guard let body = batch.payload else {
