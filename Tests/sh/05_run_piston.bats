@@ -12,6 +12,14 @@ setup() {
   cp "${SCRIPT_SOURCE}" "${FIXTURE_ROOT}/05_run_piston.sh"
   chmod +x "${FIXTURE_ROOT}/05_run_piston.sh"
   : > "${CALLS_LOG}"
+
+  # Keep tests deterministic even when caller shell exports runtime vars.
+  unset MANIFOLD_UPLOAD_URL
+  unset MANIFOLD_INGEST_KEY
+  unset VALVE_DISCOVERY_ENDPOINT
+  unset VALVE_DISCOVERY_URL
+  unset PISTON_INSTALL_ID
+  unset PISTON_INSTALL_CREDENTIAL
 }
 
 teardown() {
@@ -87,6 +95,22 @@ EOF
   chmod +x "${STUB_BIN}/1psa"
 }
 
+assert_calls_log_contains() {
+  local needle="$1"
+  local attempts=0
+
+  while [ "$attempts" -lt 50 ]; do
+    if rg -Fq "$needle" "${CALLS_LOG}"; then
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    sleep 0.02
+  done
+
+  echo "Expected calls log to contain: ${needle}"
+  return 1
+}
+
 @test "Traceability tags for run-piston requirements" {
   #R001: Strict mode and script-root execution coverage.
   #R005: Required swift command and installer guidance coverage.
@@ -120,12 +144,7 @@ EOF
     bash "${FIXTURE_ROOT}/05_run_piston.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"target_source_hint=env"* ]]
-  run python3 - "${CALLS_LOG}" <<'PY'
-from pathlib import Path
-import sys
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert "swift run PistonRunner" in text
-PY
+  run assert_calls_log_contains "swift run PistonRunner"
   [ "$status" -eq 0 ]
 }
 
@@ -146,13 +165,9 @@ PY
     bash "${FIXTURE_ROOT}/05_run_piston.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"target_source_hint=env"* ]]
-  run python3 - "${CALLS_LOG}" <<'PY'
-from pathlib import Path
-import sys
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert "swift run PistonRunner" in text
-assert "MANIFOLD_UPLOAD_URL=http://localhost:8080/v1/events/batch" in text
-PY
+  run assert_calls_log_contains "swift run PistonRunner"
+  [ "$status" -eq 0 ]
+  run assert_calls_log_contains "MANIFOLD_UPLOAD_URL=http://localhost:8080/v1/events/batch"
   [ "$status" -eq 0 ]
 }
 
@@ -163,13 +178,9 @@ PY
     bash "${FIXTURE_ROOT}/05_run_piston.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"target_source_hint=env"* ]]
-  run python3 - "${CALLS_LOG}" <<'PY'
-from pathlib import Path
-import sys
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert "swift run PistonRunner" in text
-assert "MANIFOLD_UPLOAD_URL=http://localhost:8080/v1/events/batch" in text
-PY
+  run assert_calls_log_contains "swift run PistonRunner"
+  [ "$status" -eq 0 ]
+  run assert_calls_log_contains "MANIFOLD_UPLOAD_URL=http://localhost:8080/v1/events/batch"
   [ "$status" -eq 0 ]
 }
 
@@ -218,12 +229,7 @@ PY
     bash "${FIXTURE_ROOT}/05_run_piston.sh" --install-id install-123
   [ "$status" -eq 0 ]
   [[ "$output" == *"target_source_hint=discovery"* ]]
-  run python3 - "${CALLS_LOG}" <<'PY'
-from pathlib import Path
-import sys
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert "swift run PistonRunner" in text
-PY
+  run assert_calls_log_contains "swift run PistonRunner"
   [ "$status" -eq 0 ]
 }
 
@@ -235,13 +241,9 @@ PY
     bash "${FIXTURE_ROOT}/05_run_piston.sh" --install-id install-123
   [ "$status" -eq 0 ]
   [[ "$output" == *"target_source_hint=discovery"* ]]
-  run python3 - "${CALLS_LOG}" <<'PY'
-from pathlib import Path
-import sys
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert "swift run PistonRunner" in text
-assert "VALVE_DISCOVERY_ENDPOINT=https://valve.example.com:443/v1/piston/upload-target" in text
-PY
+  run assert_calls_log_contains "swift run PistonRunner"
+  [ "$status" -eq 0 ]
+  run assert_calls_log_contains "VALVE_DISCOVERY_ENDPOINT=https://valve.example.com:443/v1/piston/upload-target"
   [ "$status" -eq 0 ]
 }
 
@@ -252,12 +254,7 @@ PY
     bash "${FIXTURE_ROOT}/05_run_piston.sh" --install-id install-123
   [ "$status" -eq 0 ]
   [[ "$output" == *"target_source_hint=discovery"* ]]
-  run python3 - "${CALLS_LOG}" <<'PY'
-from pathlib import Path
-import sys
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert "swift run PistonRunner" in text
-PY
+  run assert_calls_log_contains "swift run PistonRunner"
   [ "$status" -eq 0 ]
 }
 
@@ -281,7 +278,6 @@ PY
   [[ "$output" == *"runner_detached_pid="* ]]
   [[ "$output" == *"runner_log="* ]]
   detached_pid="$(echo "$output" | awk -F= '/runner_detached_pid=/{print $2; exit}')"
-  kill -0 "${detached_pid}" >/dev/null 2>&1
-  [ "$?" -eq 0 ]
+  kill -0 "${detached_pid}" >/dev/null 2>&1 || return 1
   kill "${detached_pid}" >/dev/null 2>&1 || true
 }

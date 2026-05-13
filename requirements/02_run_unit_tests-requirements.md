@@ -24,11 +24,11 @@ Design: Validate `Package.swift` exists at the resolved repository root before r
 Tests:
 - Remove or move `Package.swift` in a fixture and verify explicit non-zero failure output.
 
-R020  Statement: Execute Swift unit tests with fail-fast semantics.
-Design: Run `swift test --parallel --enable-xctest --disable-swift-testing`, stream output, and exit non-zero when the command fails.
+R020  Statement: Execute Swift unit tests with fail-fast semantics and deterministic serial output.
+Design: Run `swift test --no-parallel --enable-xctest --disable-swift-testing`, stream output, and exit non-zero when the command fails.
 Tests:
 - Force `swift test` to fail and verify script exits non-zero.
-- Verify test invocation includes `test --parallel --enable-xctest --disable-swift-testing`.
+- Verify test invocation includes `test --no-parallel --enable-xctest --disable-swift-testing`.
 
 R025  Statement: Fail when no unit tests are executed.
 Design: Parse `swift test` output and require at least one executed test row in either legacy XCTest (`Executed N test`) or

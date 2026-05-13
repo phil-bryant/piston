@@ -110,7 +110,7 @@ EOF
   make_bats_stub 0
   run bash -lc "cd '${TMP_ROOT}' && PATH='${STUB_BIN}:/usr/bin:/bin:/usr/sbin:/sbin' bash '${FIXTURE_ROOT}/02_run_unit_tests.sh'"
   [ "$status" -eq 0 ]
-  run rg "^swift test --parallel --enable-xctest --disable-swift-testing$" "${CALLS_LOG}"
+  run rg "^swift test --no-parallel --enable-xctest --disable-swift-testing$" "${CALLS_LOG}"
   [ "$status" -eq 0 ]
   run rg "^pwd=${FIXTURE_ROOT}$" "${CALLS_LOG}"
   [ "$status" -eq 0 ]

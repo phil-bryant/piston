@@ -26,11 +26,11 @@ if ! command -v bats >/dev/null 2>&1; then
     exit 1
 fi
 
-#R020: Execute swift unit tests with parallelism and fail-fast handling.
+#R020: Execute swift unit tests with deterministic serial output and fail-fast handling.
 TEST_OUTPUT_FILE="$(mktemp)"
 if ! (
     cd "$REPO_ROOT"
-    swift test --parallel --enable-xctest --disable-swift-testing 2>&1 | tee "$TEST_OUTPUT_FILE"
+    swift test --no-parallel --enable-xctest --disable-swift-testing 2>&1 | tee "$TEST_OUTPUT_FILE"
 ); then
     echo "Swift unit tests failed."
     exit 1
