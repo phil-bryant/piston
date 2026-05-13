@@ -112,6 +112,17 @@ EOF
   chmod +x "${STUB_BIN}/detect-secrets"
 }
 
+write_detect_secrets_stub_long_running_success() {
+  cat > "${STUB_BIN}/detect-secrets" <<'EOF'
+#!/usr/bin/env bash
+echo "detect-secrets $*" >> "${CALLS_LOG}"
+sleep 16
+printf '%s' '{"results":{}}'
+exit 0
+EOF
+  chmod +x "${STUB_BIN}/detect-secrets"
+}
+
 write_swiftlint_stub_with_findings() {
   cat > "${STUB_BIN}/swiftlint" <<'EOF'
 #!/usr/bin/env bash
@@ -197,6 +208,7 @@ EOF
   [ -f "${FIXTURE_ROOT}/.security-reports/security-summary.json" ]
   [[ "${output}" == *"Semgrep reported findings."* ]]
   [[ "${output}" == *"Gitleaks reported findings."* ]]
+  [[ "${output}" == *"intermediate status every 15s"* ]]
   [[ "${output}" == *"SwiftLint reported findings."* ]]
 }
 
@@ -229,6 +241,23 @@ EOF
     /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
   [ "$status" -eq 1 ]
   [[ "${output}" == *"detect-secrets failed to execute."* ]]
+}
+
+@test "R035: long-running detect-secrets prints heartbeat and finishes before next tool header" {
+  #R035: Verifies heartbeat output appears while detect-secrets is still running.
+  #R045: Verifies heartbeat output is emitted before the next lane header.
+  write_shellcheck_stub_clean
+  write_detect_secrets_stub_long_running_success
+  write_swiftlint_stub_with_findings
+  run env PATH="${STUB_BIN}:/usr/bin:/bin" RUN_SHELLCHECK=true RUN_SEMGREP=false RUN_GITLEAKS=false RUN_DETECT_SCAN=true RUN_SWIFTLINT=true SECURITY_FAIL_ON_FINDINGS=false \
+    /bin/bash "${FIXTURE_ROOT}/03_run_security_checks.sh"
+  [ "$status" -eq 0 ]
+  [[ "${output}" == *"… detect-secrets still running (15s elapsed)"* ]]
+  heartbeat_line="$(printf '%s\n' "${output}" | /usr/bin/awk '/^… detect-secrets still running \(15s elapsed\)$/{print NR; exit}')"
+  swiftlint_header_line="$(printf '%s\n' "${output}" | /usr/bin/awk '/Security Tool: SwiftLint/{print NR; exit}')"
+  [ -n "${heartbeat_line}" ]
+  [ -n "${swiftlint_header_line}" ]
+  [ "${heartbeat_line}" -lt "${swiftlint_header_line}" ]
 }
 
 @test "R035: detect-secrets prints findings with source lines before the next tool header" {

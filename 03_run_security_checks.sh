@@ -148,10 +148,13 @@ run_gitleaks_lane() {
   fi
 }
 
-#R035: Run detect-secrets and persist JSON report.
+#R035: Run detect-secrets with artifact-dir excludes, heartbeat status, and JSON report.
 run_detect_secrets_lane() {
   local detect_secrets_report_path="$1"
   local detect_secrets_exit=0
+  local detect_secrets_pid=""
+  local detect_secrets_elapsed=0
+  local detect_secrets_interval=15
   print_tool_header \
     "detect-secrets" \
     "Scans repository files for high-entropy and known secret formats." \
@@ -160,10 +163,33 @@ run_detect_secrets_lane() {
   echo "Report: ${detect_secrets_report_path}"
   require_command "detect-secrets" "pip install detect-secrets"
   echo "▶ Running detect-secrets"
+  echo "  (scan can take several minutes; intermediate status every 15s — JSON written only when complete)"
+  local detect_secrets_exclude_files
+  detect_secrets_exclude_files='(^|/)(\.git|DerivedData|\.security-reports|\.build)(/|$)'
+
+  cleanup_detect_secrets_lane() {
+    if [[ -n "$detect_secrets_pid" ]] && kill -0 "$detect_secrets_pid" 2>/dev/null; then
+      kill "$detect_secrets_pid" 2>/dev/null || true
+      wait "$detect_secrets_pid" 2>/dev/null || true
+    fi
+  }
+
+  trap cleanup_detect_secrets_lane EXIT INT TERM
+
   set +e
-  detect-secrets scan --all-files > "$detect_secrets_report_path"
+  detect-secrets scan --all-files --exclude-files "$detect_secrets_exclude_files" > "$detect_secrets_report_path" &
+  detect_secrets_pid=$!
+  while kill -0 "$detect_secrets_pid" 2>/dev/null; do
+    sleep "$detect_secrets_interval"
+    if kill -0 "$detect_secrets_pid" 2>/dev/null; then
+      detect_secrets_elapsed=$((detect_secrets_elapsed + detect_secrets_interval))
+      echo "… detect-secrets still running (${detect_secrets_elapsed}s elapsed)"
+    fi
+  done
+  wait "$detect_secrets_pid"
   detect_secrets_exit=$?
   set -e
+  trap - EXIT INT TERM
   if [[ "$detect_secrets_exit" -ne 0 ]]; then
     echo "❌ detect-secrets failed to execute."
     exit 1

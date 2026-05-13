@@ -40,9 +40,10 @@ Tests:
 - Stub Gitleaks execution failure and verify script exits with explicit Gitleaks execution-failure output.
 
 R035  Statement: Run detect-secrets and persist report artifacts.
-Design: Execute `detect-secrets scan --all-files`, write `detect-secrets.json`, and fail when command execution fails. When findings exist in `results`, print a readable detect-secrets findings section immediately after the detect-secrets lane output and before any next tool header; for each finding, print file/line/type and the matched source line directly beneath it.
+Design: Execute `detect-secrets scan --all-files` with `--exclude-files` set to skip `.git/`, `DerivedData/`, `.security-reports/`, and `.build/` path segments, write `detect-secrets.json`, and fail when command execution fails. The lane must block until the exact detect-secrets process exits before continuing to subsequent tool lanes. While the scan runs, print an initial note that the step can take several minutes plus periodic elapsed-time status lines (the `detect-secrets` CLI does not stream scan progress). Ensure any detect-secrets helper/background lifecycle controls are cleaned up before leaving the lane so no delayed terminal output appears after completion. When findings exist in `results`, print a readable detect-secrets findings section immediately after the detect-secrets lane output and before any next tool header; for each finding, print file/line/type and the matched source line directly beneath it.
 Tests:
 - Stub detect-secrets success output and verify report is created and findings are summarized from `results`.
+- Stub a long-running detect-secrets execution and verify elapsed-time heartbeat output is emitted before the next tool header.
 - Stub detect-secrets findings output and verify each finding prints with its source line directly below it before the next tool header.
 - Stub detect-secrets execution failure and verify script exits with explicit detect-secrets execution-failure output.
 
@@ -70,6 +71,8 @@ Tests:
 
 ## Changelog
 
+- 2026-05-13: Hardened detect-secrets lane lifecycle to wait on the exact scan process and clean up lane lifecycle controls before continuing, preventing delayed terminal noise.
+- 2026-05-13: detect-secrets lane uses `--exclude-files` for `.git`, `DerivedData`, `.security-reports`, and `.build`; prints periodic elapsed-time status while scanning (CLI has no native progress stream) and notes JSON is written only when the scan completes.
 - 2026-05-10: Added tool explainer-header requirement for each enabled security lane.
 - 2026-05-10: Added detect-secrets and SwiftLint lanes with report and summary requirements.
 - 2026-05-09: Updated traceability-tag test pattern to use a ShellCheck-safe always-pass assertion (`true`) instead of SC2050 tautologies.
